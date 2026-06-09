@@ -16,6 +16,8 @@ COMPONENTES
    Descripción: Aplicación Next.js 14 que actúa como frontend PWA y BFF.
                 Incluye API routes para reservas, mapas, pagos y autenticación.
                 Desplegado en: https://parkings-web.vercel.app
+                API REST (Swagger UI): https://parkings-web.vercel.app/api-docs.html
+                Spec OpenAPI: https://parkings-web.vercel.app/openapi.yaml
 
 2. MICROSERVICIO DE MAPAS (ms-mapas)
    Carpeta: apps/ms-mapas
@@ -23,13 +25,19 @@ COMPONENTES
    Descripción: Microservicio REST para búsqueda y gestión de estacionamientos.
                 Implementa patrón Controller→Service→Repository.
                 Expone: GET/POST/PATCH/DELETE /api/v1/search
+                API desplegada (Render): https://api-mapas-chile.onrender.com
+                API REST (Swagger UI): https://api-mapas-chile.onrender.com/api-docs.html
+                Spec OpenAPI: https://api-mapas-chile.onrender.com/openapi.yaml
 
 3. MICROSERVICIO DE RESERVAS (ms-reservas)
    Carpeta: apps/ms-reservas
    URL: https://github.com/jeffplop/Parkings-Together/tree/master/apps/ms-reservas
    Descripción: Microservicio de reservas con patrón Saga/CQRS.
                 Implementa transacciones compensatorias para consistencia.
-                Expone: POST /api/v1/reserve
+                Expone: GET/POST /api/v1/reserve
+                API desplegada (Render): https://ms-reservas-m6nq.onrender.com
+                API REST (Swagger UI): https://ms-reservas-m6nq.onrender.com/api-docs.html
+                Spec OpenAPI: https://ms-reservas-m6nq.onrender.com/openapi.yaml
 
 4. MICROSERVICIO DE AUTENTICACIÓN (auth)
    Carpeta: apps/auth
@@ -37,12 +45,35 @@ COMPONENTES
    Descripción: Microservicio de autenticación y registro de usuarios.
                 Patrón MVC con capas Controller→Service→Repository.
                 Expone: POST /api/v1/auth/login, POST /api/v1/auth/register
+                API desplegada (Render): https://ms-auth-n0pd.onrender.com
+                API REST (Swagger UI): https://ms-auth-n0pd.onrender.com/api-docs.html
+                Spec OpenAPI: https://ms-auth-n0pd.onrender.com/openapi.yaml
 
 5. PAQUETE COMPARTIDO (supabase-db)
    Carpeta: packages/supabase-db
    URL: https://github.com/jeffplop/Parkings-Together/tree/master/packages/supabase-db
    Descripción: Paquete NPM compartido con cliente Supabase (patrón Singleton).
                 Usado por todos los microservicios y el BFF.
+
+APIS REST DESPLEGADAS — LINKS Y DOCUMENTACIÓN (SWAGGER)
+-------------------------------------------------------
+Cada servicio publica su documentación OpenAPI 3.0 interactiva (Swagger UI) en
+/api-docs.html y el contrato OpenAPI en /openapi.yaml.
+
+  BFF (Vercel)         https://parkings-web.vercel.app/api-docs.html
+  auth (Render)        https://ms-auth-n0pd.onrender.com/api-docs.html
+  ms-mapas (Render)    https://api-mapas-chile.onrender.com/api-docs.html
+  ms-reservas (Render) https://ms-reservas-m6nq.onrender.com/api-docs.html
+
+Endpoints base de los microservicios:
+  auth        POST https://ms-auth-n0pd.onrender.com/api/v1/auth/login
+              POST https://ms-auth-n0pd.onrender.com/api/v1/auth/register
+  ms-mapas    GET  https://api-mapas-chile.onrender.com/api/v1/search
+  ms-reservas GET  https://ms-reservas-m6nq.onrender.com/api/v1/reserve?parkingId=47
+
+Nota (Render plan free): tras ~15 min de inactividad, la primera petición a un
+microservicio puede tardar ~30-60 s (cold start). Abre los enlaces unos minutos
+antes de probar para "despertar" los servicios.
 
 RAMA DE DESARROLLO
 ------------------

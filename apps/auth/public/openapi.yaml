@@ -1,0 +1,132 @@
+openapi: 3.0.3
+info:
+  title: Parkings Together — Microservicio de Autenticación (auth)
+  version: 1.0.0
+  description: |
+    API REST del microservicio **auth** de Parkings Together.
+
+    Gestiona el **registro** y el **inicio de sesión** de usuarios sobre
+    Supabase Auth y devuelve la **sesión (JWT)** que el resto de los servicios
+    usa para autorizar peticiones (`Authorization: Bearer <access_token>`).
+
+    Arquitectura interna: `Route Handler → Controller → Service → Repository → Supabase Auth`.
+
+    > ⚠️ **Render (plan free):** si el servicio estuvo inactivo ~15 min, la
+    > primera petición puede tardar ~30–60 s en responder (*cold start*).
+servers:
+  - url: https://ms-auth-n0pd.onrender.com
+    description: Producción (Render)
+  - url: http://localhost:3001
+    description: Desarrollo local
+tags:
+  - name: Autenticación
+    description: Registro e inicio de sesión
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [Autenticación]
+      summary: Registrar un nuevo usuario
+      description: Crea un usuario en Supabase Auth y su perfil asociado. Devuelve la sesión.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistroInput'
+            example:
+              email: nuevo@ejemplo.cl
+              password: "Secreta123!"
+              nombre: Gabriel Molina
+              rol: cliente
+      responses:
+        '201':
+          description: Usuario creado; devuelve usuario y sesión
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthOK' }
+        '400':
+          description: Faltan campos obligatorios o el registro falló
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                success: false
+                error: "Nombre, email, contraseña y rol son obligatorios."
+  /api/v1/auth/login:
+    post:
+      tags: [Autenticación]
+      summary: Iniciar sesión
+      description: Valida las credenciales y devuelve la sesión con el JWT del usuario.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Credenciales' }
+            example:
+              email: nuevo@ejemplo.cl
+              password: "Secreta123!"
+      responses:
+        '200':
+          description: Sesión iniciada; devuelve usuario y sesión (JWT)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthOK' }
+        '400':
+          description: Faltan credenciales
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                success: false
+                error: "Email y contraseña son obligatorios."
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                success: false
+                error: "Credenciales inválidas. Verifica tu email y contraseña."
+components:
+  schemas:
+    Credenciales:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    RegistroInput:
+      type: object
+      required: [email, password, nombre, rol]
+      properties:
+        email: { type: string, format: email }
+        password:
+          type: string
+          format: password
+          description: Mínimo 8 caracteres.
+        nombre: { type: string }
+        rol:
+          type: string
+          enum: [cliente, arrendador]
+          description: Tipo de cuenta (conductor o arrendador).
+    AuthOK:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        user:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string, format: email }
+        session:
+          type: object
+          description: Sesión de Supabase. Su access_token es el JWT a usar como Bearer.
+          properties:
+            access_token: { type: string, description: JWT del usuario }
+            refresh_token: { type: string }
+            expires_at: { type: integer, description: Epoch (segundos) de expiración }
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }

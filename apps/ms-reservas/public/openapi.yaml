@@ -1,0 +1,139 @@
+openapi: 3.0.3
+info:
+  title: Parkings Together — Microservicio de Reservas (ms-reservas)
+  version: 1.0.0
+  description: |
+    API REST del microservicio **ms-reservas** de Parkings Together.
+
+    Gestiona la **disponibilidad** y la **creación de reservas** aplicando el
+    patrón **Saga** (con compensación) y **CQRS** (lectura de disponibilidad
+    separada de la escritura):
+
+    1. Verifica capacidad (`occupied_spots < total_spots`).
+    2. Inserta la reserva.
+    3. Incrementa la ocupación; si falla, **revierte** la reserva (compensación).
+
+    Arquitectura interna: `Route Handler → Service (Saga/CQRS) → Repository → Supabase (PostgreSQL)`.
+
+    > ⚠️ **Render (plan free):** la primera petición tras ~15 min de inactividad
+    > puede tardar ~30–60 s (*cold start*).
+servers:
+  - url: https://ms-reservas-m6nq.onrender.com
+    description: Producción (Render)
+  - url: http://localhost:3003
+    description: Desarrollo local
+tags:
+  - name: Reservas
+    description: Disponibilidad y creación de reservas
+paths:
+  /api/v1/reserve:
+    get:
+      tags: [Reservas]
+      summary: Consultar disponibilidad de un estacionamiento
+      description: Devuelve si hay cupos libres y cuántos quedan (lado *Query* de CQRS).
+      parameters:
+        - name: parkingId
+          in: query
+          required: true
+          schema: { type: integer }
+          example: 47
+          description: ID del estacionamiento a consultar.
+      responses:
+        '200':
+          description: Disponibilidad del estacionamiento
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Disponibilidad' }
+              example:
+                available: true
+                spots_left: 5
+                data:
+                  occupied_spots: 0
+                  total_spots: 5
+                  nombre: Estacionamiento Centro
+                  id: 47
+        '400':
+          description: Falta el parámetro parkingId
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: "Falta parkingId" }
+        '500':
+          description: Estacionamiento inexistente o error de base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    post:
+      tags: [Reservas]
+      summary: Crear una reserva (Saga)
+      description: |
+        Crea una reserva instantánea para el usuario indicado, validando capacidad.
+        Si la actualización de ocupación falla, la reserva se revierte automáticamente
+        (compensación de la Saga).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservaInput' }
+            example:
+              parking_id: 47
+              user_id: 8483b805-2755-42dd-b914-d48689727142
+              duration_hours: 2
+      responses:
+        '201':
+          description: Reserva creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  reserva: { $ref: '#/components/schemas/Reserva' }
+        '500':
+          description: Estacionamiento lleno o fallo en la Saga (reserva revertida)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: "El estacionamiento ya está lleno. Transacción rechazada." }
+components:
+  schemas:
+    Disponibilidad:
+      type: object
+      properties:
+        available: { type: boolean }
+        spots_left: { type: integer }
+        data:
+          type: object
+          properties:
+            occupied_spots: { type: integer }
+            total_spots: { type: integer }
+            nombre: { type: string }
+            id: { type: integer }
+    ReservaInput:
+      type: object
+      required: [parking_id, user_id]
+      properties:
+        parking_id: { type: integer, example: 47 }
+        user_id: { type: string, format: uuid }
+        start_time:
+          type: string
+          format: date-time
+          description: Inicio de la reserva. Por defecto, ahora.
+        duration_hours:
+          type: number
+          description: Duración en horas (opcional).
+    Reserva:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        estacionamiento_id: { type: integer, example: 47 }
+        conductor_id: { type: string, format: uuid }
+        estado:
+          type: string
+          enum: [pendiente, confirmada, activa, completada, cancelada]
+          example: activa
+        created_at: { type: string, format: date-time }
+    Error:
+      type: object
+      properties:
+        error: { type: string }

@@ -1,0 +1,207 @@
+openapi: 3.0.3
+info:
+  title: Parkings Together — Microservicio de Mapas (ms-mapas)
+  version: 1.0.0
+  description: |
+    API REST del microservicio **ms-mapas** de Parkings Together.
+
+    Gestiona el **catálogo de estacionamientos**: listar, crear, actualizar la
+    ocupación y eliminar. Es la fuente de datos del mapa interactivo (Leaflet) y
+    del semáforo de disponibilidad.
+
+    Arquitectura interna: `Route Handler → Controller → Service → Repository → Supabase (PostgreSQL + PostGIS)`.
+
+    Todos los endpoints viven bajo el recurso único `/api/v1/search` y se
+    diferencian por el **método HTTP**.
+
+    > ⚠️ **Render (plan free):** la primera petición tras ~15 min de inactividad
+    > puede tardar ~30–60 s (*cold start*).
+servers:
+  - url: https://api-mapas-chile.onrender.com
+    description: Producción (Render)
+  - url: http://localhost:3002
+    description: Desarrollo local
+tags:
+  - name: Estacionamientos
+    description: Catálogo de estacionamientos
+paths:
+  /api/v1/search:
+    get:
+      tags: [Estacionamientos]
+      summary: Listar estacionamientos
+      description: Devuelve todos los estacionamientos, o solo los de un arrendador si se pasa `userId`.
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+          description: Filtra por dueño (arrendador). Si se omite, devuelve todos.
+      responses:
+        '200':
+          description: Lista de estacionamientos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Estacionamiento' }
+        '500':
+          description: Error de base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    post:
+      tags: [Estacionamientos]
+      summary: Crear un estacionamiento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EstacionamientoInput' }
+            example:
+              nombre: Estacionamiento Centro
+              lat: -33.4456
+              lng: -70.6533
+              userId: 8483b805-2755-42dd-b914-d48689727142
+              arrendador: Gabriel Molina
+              total_spots: 5
+              precio_hora: 1500
+              es_pmr: false
+      responses:
+        '201':
+          description: Estacionamiento creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Estacionamiento' }
+        '400':
+          description: Faltan campos obligatorios (nombre, lat, lng, userId)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: Error de base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    patch:
+      tags: [Estacionamientos]
+      summary: Actualizar la ocupación
+      description: Actualiza `occupied_spots` de un estacionamiento.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, occupied_spots]
+              properties:
+                id: { type: integer, example: 47 }
+                occupied_spots: { type: integer, example: 3 }
+      responses:
+        '200':
+          description: Ocupación actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data: { $ref: '#/components/schemas/Estacionamiento' }
+        '400':
+          description: Faltan id u occupied_spots
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Estacionamientos]
+      summary: Eliminar estacionamientos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: integer }
+                  example: [47, 48]
+      responses:
+        '200':
+          description: Estacionamientos eliminados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  deleted: { type: integer, example: 2 }
+        '400':
+          description: Se requiere un array de IDs
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+components:
+  schemas:
+    Estacionamiento:
+      type: object
+      properties:
+        id: { type: integer, example: 47 }
+        nombre: { type: string, example: "Estacionamiento Centro" }
+        lat: { type: number, format: float, example: -33.405575 }
+        lng: { type: number, format: float, example: -70.639056 }
+        precio_hora: { type: number, example: 1500 }
+        es_pmr: { type: boolean, example: false }
+        rating: { type: number, example: 4.6 }
+        reviews_count: { type: integer, example: 5 }
+        comuna: { type: string, example: Santiago }
+        total_spots: { type: integer, example: 5 }
+        occupied_spots: { type: integer, example: 0 }
+        arrendador: { type: string, example: Gabriel Molina }
+        user_id: { type: string, format: uuid }
+        activo: { type: boolean, example: true }
+        photos:
+          type: array
+          items: { type: string, format: uri }
+        allowed_vehicle_types:
+          type: array
+          items: { type: string }
+          example: [car, motorcycle, bicycle, scooter]
+        price_per_minute: { type: number, nullable: true }
+        price_per_day: { type: number, nullable: true }
+        descripcion: { type: string, nullable: true }
+        coordenadas:
+          type: object
+          description: Punto PostGIS (GeoJSON, SRID 4326).
+          properties:
+            type: { type: string, example: Point }
+            coordinates:
+              type: array
+              items: { type: number }
+              example: [-70.639056, -33.405575]
+        created_at: { type: string, format: date-time }
+    EstacionamientoInput:
+      type: object
+      required: [nombre, lat, lng, userId]
+      properties:
+        nombre: { type: string }
+        lat: { type: number, format: float }
+        lng: { type: number, format: float }
+        userId: { type: string, format: uuid, description: Dueño (arrendador) }
+        arrendador: { type: string }
+        total_spots: { type: integer, default: 1 }
+        precio_hora: { type: number }
+        es_pmr: { type: boolean, default: false }
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }

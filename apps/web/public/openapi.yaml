@@ -1,0 +1,606 @@
+openapi: 3.0.3
+info:
+  title: Parkings Together — BFF (Backend for Frontend)
+  version: 1.0.0
+  description: |
+    API del **BFF** de Parkings Together (capa `apps/web/app/api`).
+
+    Es la API de **mismo origen** que consume el frontend PWA. Orquesta la lógica
+    de dominio (reservas con Saga, RPC atómicas, pagos, favoritos, premium,
+    soporte) directamente contra **Supabase** (PostgreSQL + Auth + Realtime),
+    inyectando el **JWT del usuario** para que las políticas **RLS** evalúen
+    `auth.uid()`.
+
+    ## Autenticación
+    La mayoría de los endpoints requieren la cabecera
+    `Authorization: Bearer <access_token>` (el JWT que devuelve el login).
+    Los endpoints de lectura pública (búsqueda, reseñas) no la requieren.
+  contact:
+    name: Parkings Together
+servers:
+  - url: https://parkings-web.vercel.app
+    description: Producción (Vercel)
+  - url: http://localhost:3000
+    description: Desarrollo local
+tags:
+  - name: Auth
+    description: Registro de usuarios
+  - name: Mapas
+    description: Estacionamientos y bloqueos de plaza
+  - name: Reservas
+    description: Disponibilidad, creación y gestión de reservas
+  - name: Favoritos
+  - name: Pagos
+  - name: Premium
+  - name: Reseñas
+  - name: Soporte
+paths:
+  /api/auth/signup:
+    post:
+      tags: [Auth]
+      summary: Registrar un usuario (alta + auto-login)
+      description: Crea el usuario y su perfil; si el rol es cliente y se envía patente, crea su primer vehículo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignupInput' }
+            example:
+              email: nuevo@ejemplo.cl
+              password: "Secreta123!"
+              nombre: Gabriel
+              apellido: Molina
+              rol: cliente
+              telefono: "+56912345678"
+              tipo_vehiculo: auto
+              patente: ABCD12
+      responses:
+        '200':
+          description: Cuenta creada (con o sin auto-login)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  autoLogin: { type: boolean }
+                  session: { type: object, nullable: true }
+                  user: { type: object }
+                  message: { type: string }
+        '400':
+          description: Datos inválidos (email, contraseña insegura, rol o cuenta existente)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '429':
+          description: Demasiados intentos (rate limit)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  /api/mapas/search:
+    get:
+      tags: [Mapas]
+      summary: Buscar estacionamientos
+      description: Búsqueda pública. Soporta detalle por `id`, filtro por `userId`, búsqueda geoespacial (`lat`,`lng`,`radius`) y filtros (`q`,`comuna`,`pmr`,`disponible`,`precioMin`,`precioMax`).
+      parameters:
+        - { name: id, in: query, schema: { type: integer }, description: Detalle de un estacionamiento puntual }
+        - { name: userId, in: query, schema: { type: string, format: uuid }, description: Estacionamientos de un arrendador }
+        - { name: lat, in: query, schema: { type: number } }
+        - { name: lng, in: query, schema: { type: number } }
+        - { name: radius, in: query, schema: { type: number }, description: Radio en km (búsqueda PostGIS) }
+        - { name: q, in: query, schema: { type: string }, description: Texto en el nombre }
+        - { name: comuna, in: query, schema: { type: string } }
+        - { name: pmr, in: query, schema: { type: boolean } }
+        - { name: disponible, in: query, schema: { type: boolean } }
+        - { name: precioMin, in: query, schema: { type: number } }
+        - { name: precioMax, in: query, schema: { type: number } }
+      responses:
+        '200':
+          description: Resultado de la búsqueda
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Estacionamiento' }
+    post:
+      tags: [Mapas]
+      summary: Crear un estacionamiento
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EstacionamientoInputBFF' }
+            example:
+              nombre: Estacionamiento Centro
+              lat: -33.4456
+              lng: -70.6533
+              totalSpots: 5
+              precioHora: 1500
+              esPmr: false
+              comuna: Santiago
+      responses:
+        '201':
+          description: Estacionamiento creado
+          content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { $ref: '#/components/schemas/Estacionamiento' } } } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403':
+          description: RLS rechazó la operación (no es arrendador o no es el dueño)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    patch:
+      tags: [Mapas]
+      summary: Actualizar un estacionamiento
+      description: "Según `action`: `toggleActivo` (activar/desactivar), `updateFull` (editar campos) o, por defecto, actualizar `occupied_spots`."
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: integer }
+                action: { type: string, enum: [toggleActivo, updateFull] }
+                occupied_spots: { type: integer }
+                nombre: { type: string }
+                totalSpots: { type: integer }
+                esPmr: { type: boolean }
+                precioHora: { type: number }
+                photos: { type: array, items: { type: string } }
+      responses:
+        '200':
+          description: Estacionamiento actualizado
+          content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { $ref: '#/components/schemas/Estacionamiento' } } } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    delete:
+      tags: [Mapas]
+      summary: Eliminar estacionamientos (soft o hard delete)
+      description: Si un estacionamiento tiene reservas vigentes se desactiva (soft-delete); si no, se borra.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: integer }, example: [47, 48] }
+      responses:
+        '200':
+          description: Resultado de la eliminación
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  hardDeleted: { type: integer }
+                  softDeleted: { type: integer }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+  /api/mapas/locks:
+    get:
+      tags: [Mapas]
+      summary: Bloqueos activos de plazas de un estacionamiento
+      parameters:
+        - { name: estacionamientoId, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Lista de bloqueos vigentes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        spot_label: { type: string }
+                        user_id: { type: string, format: uuid }
+                        expires_at: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/SolicitudInvalida' }
+    post:
+      tags: [Mapas]
+      summary: Tomar (bloquear) una plaza por 5 minutos
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estacionamiento_id, spot_label]
+              properties:
+                estacionamiento_id: { type: integer }
+                spot_label: { type: string, example: A1 }
+      responses:
+        '201':
+          description: Plaza bloqueada
+          content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, lockId: { type: string, format: uuid } } } } }
+        '409':
+          description: La plaza ya fue tomada por otro usuario
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    delete:
+      tags: [Mapas]
+      summary: Liberar un bloqueo
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: lockId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Bloqueo liberado, content: { application/json: { schema: { type: object, properties: { success: { type: boolean } } } } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+  /api/reservas/reserve:
+    get:
+      tags: [Reservas]
+      summary: Disponibilidad de un estacionamiento
+      parameters:
+        - { name: parkingId, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Disponibilidad
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  available: { type: boolean }
+                  spots_left: { type: integer }
+                  data: { type: object }
+        '400': { $ref: '#/components/responses/SolicitudInvalida' }
+    post:
+      tags: [Reservas]
+      summary: Crear una reserva (PRO o instantánea)
+      description: Con `fecha_inicio`/`fecha_fin` (o `duration_hours`) crea una reserva PRO (queda `pendiente`); sin fechas, ocupa un cupo al instante. Usa RPC atómicas con bloqueo de fila.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parking_id, user_id]
+              properties:
+                parking_id: { type: integer, example: 47 }
+                user_id: { type: string, format: uuid }
+                fecha_inicio: { type: string, format: date-time }
+                fecha_fin: { type: string, format: date-time }
+                duration_hours: { type: number }
+                spot_label: { type: string }
+      responses:
+        '201':
+          description: Reserva creada
+          content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, reserva: { $ref: '#/components/schemas/Reserva' } } } } }
+        '409':
+          description: Estacionamiento lleno para el horario solicitado
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+  /api/reservas/manage:
+    get:
+      tags: [Reservas]
+      summary: Listar reservas (del conductor o del arrendador)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [conductor, arrendador], default: conductor } }
+      responses:
+        '200':
+          description: Reservas según el scope
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  scope: { type: string }
+                  data: { type: array, items: { $ref: '#/components/schemas/Reserva' } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    patch:
+      tags: [Reservas]
+      summary: Gestionar una reserva
+      description: "Acciones: `confirmar`, `cancelar`, `completar`, `calificar` (1–5 + comentario) y `reprogramar` (requiere fechas)."
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, reserva_id]
+              properties:
+                action: { type: string, enum: [confirmar, cancelar, completar, calificar, reprogramar] }
+                reserva_id: { type: string, format: uuid }
+                fecha_inicio: { type: string, format: date-time }
+                fecha_fin: { type: string, format: date-time }
+                calificacion: { type: integer, minimum: 1, maximum: 5 }
+                comentario: { type: string }
+                review_photo_url: { type: string, format: uri }
+      responses:
+        '200':
+          description: Reserva actualizada
+          content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, reserva: { $ref: '#/components/schemas/Reserva' } } } } }
+        '403':
+          description: No autorizado para esta acción
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: Estacionamiento lleno (al reprogramar)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+  /api/favoritos:
+    get:
+      tags: [Favoritos]
+      summary: Favoritos del usuario
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de favoritos (con datos del estacionamiento)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { type: object } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    post:
+      tags: [Favoritos]
+      summary: Añadir un favorito
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estacionamiento_id]
+              properties: { estacionamiento_id: { type: integer } }
+      responses:
+        '201': { description: Favorito añadido, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: object } } } } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    delete:
+      tags: [Favoritos]
+      summary: Quitar un favorito
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estacionamiento_id]
+              properties: { estacionamiento_id: { type: integer } }
+      responses:
+        '200': { description: Favorito eliminado, content: { application/json: { schema: { type: object, properties: { success: { type: boolean } } } } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+  /api/pagos:
+    post:
+      tags: [Pagos]
+      summary: Registrar el pago de una reserva
+      description: Cobra mediante la capa de proveedores (Strategy). Valida propiedad, monto e idempotencia.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                reserva_id: { type: string, format: uuid, nullable: true }
+                amount: { type: number, example: 3000 }
+                provider: { type: string, enum: [mock, efectivo, webpay], default: mock }
+                metadata: { type: object, nullable: true }
+      responses:
+        '201':
+          description: Pago registrado
+          content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, payment: { $ref: '#/components/schemas/Pago' } } } } }
+        '200':
+          description: Pago ya existente (idempotente)
+          content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, payment: { $ref: '#/components/schemas/Pago' }, idempotent: { type: boolean } } } } }
+        '400': { $ref: '#/components/responses/SolicitudInvalida' }
+        '403': { description: No puedes pagar una reserva ajena, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+  /api/premium:
+    get:
+      tags: [Premium]
+      summary: Plan actual del usuario
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Plan vigente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      plan: { type: string, enum: [free, pro, premium] }
+                      plan_ciclo: { type: string, enum: [mensual, anual] }
+                      plan_desde: { type: string, format: date-time, nullable: true }
+                      rol: { type: string }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    post:
+      tags: [Premium]
+      summary: Cambiar de plan
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { type: string, enum: [free, pro, premium] }
+                ciclo: { type: string, enum: [mensual, anual], default: mensual }
+      responses:
+        '200':
+          description: Plan actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: object }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/SolicitudInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+  /api/reseñas:
+    get:
+      tags: [Reseñas]
+      summary: Reseñas de un estacionamiento
+      description: Deriva las reseñas de las reservas calificadas e incluye un resumen (promedio y distribución de estrellas).
+      parameters:
+        - { name: estacionamiento_id, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Reseñas y resumen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Resena' }
+                  resumen:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      promedio: { type: number }
+                      distribucion: { type: object }
+        '400': { $ref: '#/components/responses/SolicitudInvalida' }
+  /api/support/chat:
+    post:
+      tags: [Soporte]
+      summary: Chat con el asistente de soporte (Dareko)
+      description: Responde dudas sobre la plataforma. Incluye detección de prompt injection y escalación a soporte humano.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role: { type: string, enum: [user, assistant] }
+                      content: { type: string }
+                  example:
+                    - { role: user, content: "¿Cómo reservo un estacionamiento?" }
+      responses:
+        '200':
+          description: Respuesta del asistente
+          content: { application/json: { schema: { type: object, properties: { reply: { type: string } } } } }
+        '400': { $ref: '#/components/responses/SolicitudInvalida' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT de Supabase obtenido en el login (`access_token`).
+  responses:
+    NoAutenticado:
+      description: Falta o es inválido el token Bearer
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    SolicitudInvalida:
+      description: Parámetros o cuerpo inválidos
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    SignupInput:
+      type: object
+      required: [email, password, nombre, apellido, rol]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, description: "Mín. 8 caracteres: mayúscula, minúscula, número y símbolo." }
+        nombre: { type: string }
+        apellido: { type: string }
+        rol: { type: string, enum: [cliente, arrendador] }
+        telefono: { type: string }
+        tipo_vehiculo: { type: string, enum: [auto, moto, bicicleta, scooter] }
+        patente: { type: string }
+        empresa: { type: string }
+    Estacionamiento:
+      type: object
+      properties:
+        id: { type: integer, example: 47 }
+        nombre: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        precio_hora: { type: number }
+        total_spots: { type: integer }
+        occupied_spots: { type: integer }
+        es_pmr: { type: boolean }
+        rating: { type: number }
+        reviews_count: { type: integer }
+        comuna: { type: string }
+        activo: { type: boolean }
+        user_id: { type: string, format: uuid }
+    EstacionamientoInputBFF:
+      type: object
+      required: [nombre, lat, lng]
+      properties:
+        nombre: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        arrendador: { type: string }
+        totalSpots: { type: integer, default: 1 }
+        precioHora: { type: number }
+        esPmr: { type: boolean }
+        comuna: { type: string }
+        descripcion: { type: string }
+        direccion: { type: string }
+        allowedVehicleTypes: { type: array, items: { type: string } }
+    Reserva:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        estacionamiento_id: { type: integer }
+        conductor_id: { type: string, format: uuid }
+        estado: { type: string, enum: [pendiente, confirmada, activa, completada, cancelada] }
+        fecha_inicio: { type: string, format: date-time, nullable: true }
+        fecha_fin: { type: string, format: date-time, nullable: true }
+        precio_total: { type: number, nullable: true }
+        calificacion: { type: integer, nullable: true }
+        comentario: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    Pago:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        transaction_id: { type: string }
+        status: { type: string, example: completed }
+    Resena:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        calificacion: { type: integer }
+        comentario: { type: string, nullable: true }
+        review_photo_url: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        perfil:
+          type: object
+          nullable: true
+          properties:
+            nombre: { type: string }
+            apellido: { type: string }
+            avatar_url: { type: string, nullable: true }
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }
