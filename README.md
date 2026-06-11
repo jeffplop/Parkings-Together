@@ -177,6 +177,7 @@ cd apps/ms-reservas && npm test
 - [`docs/DIAGRAMA_ARQUITECTURA.md`](docs/DIAGRAMA_ARQUITECTURA.md) — Diagrama de arquitectura del sistema
 - [`docs/PERSISTENCIA.md`](docs/PERSISTENCIA.md) — Documentación de la persistencia de datos
 - [`docs/SWAGGER.md`](docs/SWAGGER.md) — Documentación de la API REST (Swagger/OpenAPI)
+- [`docs/INFORME_PRUEBAS.md`](docs/INFORME_PRUEBAS.md) — Informe de pruebas (resultados y cobertura)
 - [`docs/PATRONES_DISEÑO.md`](docs/PATRONES_DISEÑO.md) — Patrones de diseño implementados
 - [`docs/ESTRATEGIA_BRANCHING.md`](docs/ESTRATEGIA_BRANCHING.md) — Estrategia de branching y flujo de trabajo
 - [`repositorios.txt`](repositorios.txt) — URLs de todos los componentes
