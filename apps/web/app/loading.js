@@ -12,7 +12,7 @@ export default function Loading() {
           <div className="scanner-line"></div>
         </div>
         <h2 className="loading-text">
-          Conectando a la red P2P<span>.</span><span>.</span><span>.</span>
+          Cargando<span>.</span><span>.</span><span>.</span>
         </h2>
         <div className="progress-bar-container">
           <div className="progress-bar-fill"></div>

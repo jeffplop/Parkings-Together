@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@parkings/supabase-db';
+import { api } from '../lib/api';
 
 const LogoSVG = ({ className }) => (
   <svg 
@@ -43,7 +44,7 @@ const LogoSVG = ({ className }) => (
 const NAV_ITEMS = [
   { href: '/', label: 'Inicio', icon: 'fa-house' },
   { href: '/mapa', label: 'Buscar Plaza', icon: 'fa-map-location-dot' },
-  { href: '/sobre-mi', label: 'Acerca de', icon: 'fa-circle-info' },
+  { href: '/ranking', label: 'Ranking', icon: 'fa-trophy' },
 ];
 
 const AUTH_NAV_ITEMS = [
@@ -54,6 +55,8 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [favCount, setFavCount] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
   const dropdownRef = useRef(null);
@@ -84,6 +87,45 @@ export default function Navbar() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // ── Favorites count ──
+  useEffect(() => {
+    if (!user) { setFavCount(0); return; }
+    api.favoritos.listar().then(res => {
+      if (res.success) setFavCount((res.data || []).length);
+    }).catch(() => {});
+  }, [user]);
+
+  // ── Realtime pending reservations count ──
+  useEffect(() => {
+    if (!user) { setPendingCount(0); return; }
+
+    let channel;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      const token = session.access_token;
+
+      const loadCount = async () => {
+        try {
+          const res = await fetch('/api/reservas/manage?scope=arrendador', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          if (data.success) {
+            setPendingCount((data.data || []).filter(r => r.estado === 'pendiente').length);
+          }
+        } catch { /* ignore */ }
+      };
+
+      loadCount();
+      channel = supabase
+        .channel('navbar-reservas')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas' }, loadCount)
+        .subscribe();
+    });
+
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, [user]);
 
   // ── Click Outside Dropdown ──
   useEffect(() => {
@@ -155,6 +197,12 @@ export default function Navbar() {
 
           <div className="nav-divider"></div>
 
+          {/* ═══ PREMIUM CTA ═══ */}
+          <Link href="/premium" className={`premium-link ${isActive('/premium') ? 'active' : ''}`} onClick={closeMenus}>
+            <i className="fa-solid fa-crown"></i>
+            <span>Premium</span>
+          </Link>
+
           {/* ═══ AUTH / USER SECTION ═══ */}
           <div className="auth-container">
             {!user ? (
@@ -186,11 +234,33 @@ export default function Navbar() {
                         <i className="fa-solid fa-user-gear dropdown-icon"></i>
                         <span>Mi Perfil</span>
                       </Link>
+                      <Link href="/reservas" className="nav-link-cyber dropdown-item" onClick={closeMenus} style={{ position: 'relative' }}>
+                        <i className="fa-solid fa-calendar-check dropdown-icon"></i>
+                        <span>Mis Reservas</span>
+                        {pendingCount > 0 && (
+                          <span style={{ marginLeft: 'auto', background: '#ef4444', color: 'white', borderRadius: '10px', fontSize: '0.7rem', padding: '1px 7px', fontWeight: 900 }}>
+                            {pendingCount}
+                          </span>
+                        )}
+                      </Link>
+                      <Link href="/profile?tab=favoritos" className="nav-link-cyber dropdown-item" onClick={closeMenus} style={{ position: 'relative' }}>
+                        <i className="fa-solid fa-star dropdown-icon"></i>
+                        <span>Favoritos</span>
+                        {favCount > 0 && (
+                          <span style={{ marginLeft: 'auto', background: '#f59e0b', color: '#020617', borderRadius: '10px', fontSize: '0.7rem', padding: '1px 7px', fontWeight: 900 }}>
+                            {favCount}
+                          </span>
+                        )}
+                      </Link>
                       <Link href="/dashboard" className="nav-link-cyber dropdown-item" onClick={closeMenus}>
                         <i className="fa-solid fa-chart-line dropdown-icon"></i>
                         <span>Panel de Control</span>
                       </Link>
-                      
+                      <Link href="/premium" className="nav-link-cyber dropdown-item" onClick={closeMenus} style={{ color: '#fbbf24' }}>
+                        <i className="fa-solid fa-crown dropdown-icon" style={{ color: '#fbbf24' }}></i>
+                        <span>Hazte Premium</span>
+                      </Link>
+
                       <div className="dropdown-divider"></div>
                       
                       <button className="nav-link-cyber dropdown-item danger-item" onClick={handleLogout}>
@@ -255,6 +325,30 @@ export default function Navbar() {
           height: 30px;
           background: var(--glass-border);
           margin: 0 16px;
+        }
+
+        /* ── PREMIUM CTA ── */
+        .premium-link {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 9px 16px;
+          margin-right: 12px;
+          border-radius: 12px;
+          font-weight: 800;
+          font-size: 0.9rem;
+          color: #fbbf24;
+          text-decoration: none;
+          background: rgba(245, 158, 11, 0.1);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          transition: all 0.25s;
+          white-space: nowrap;
+        }
+        .premium-link:hover, .premium-link.active {
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+          color: white;
+          box-shadow: 0 6px 18px rgba(245, 158, 11, 0.4);
+          transform: translateY(-1px);
         }
 
         /* ── USER & DROPDOWN ── */
@@ -404,6 +498,12 @@ export default function Navbar() {
           }
           .auth-container {
             width: 100%;
+          }
+          .premium-link {
+            width: 100%;
+            justify-content: center;
+            margin-right: 0;
+            margin-bottom: 10px;
           }
           .btn-cyber-primary {
             width: 100%;

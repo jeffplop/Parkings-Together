@@ -1,36 +1,190 @@
-# Parking-s-Together Backend
-# Parking-s-Together
+# Parkings Together
 
-**Optimización de Movilidad Urbana y Gestión Inteligente de Estacionamientos**
+**Plataforma de Optimización de Movilidad Urbana y Gestión Inteligente de Estacionamientos**
 
-Es una plataforma tecnológica diseñada para revolucionar la forma en que los conductores encuentran estacionamiento en áreas metropolitanas. A través de un sistema en tiempo real basado en geolocalización, la aplicación reduce la congestión vehicular, fomenta la inclusión y abre la puerta a un modelo de economía colaborativa (Peer-to-Peer).
+Sistema peer-to-peer que conecta conductores con propietarios de estacionamientos mediante geolocalización en tiempo real. Los conductores encuentran plazas disponibles, hacen reservas y pagan desde la app. Los arrendadores gestionan sus espacios y reciben reservas al instante.
 
 ---
 
-## Caracteristicas Principales
+## Estructura del Monorepo (Turborepo)
 
-* **Semáforo de Ocupación en Tiempo Real:** Interfaz visual intuitiva (Verde, Amarillo, Rojo) impulsada por WebSockets para conocer la disponibilidad al instante de forma segura mientras se conduce.
-* **Enfoque Inclusivo:** Monitoreo y visualización destacada de plazas de garantía exclusivas para personas con movilidad reducida.
-* **Modelo P2P y Tarifas Dinámicas:** Permite a usuarios particulares ofrecer sus propios espacios privados, junto con un sistema de reservas anticipadas.
-* **Preparado para IoT y Smart Cities:** Arquitectura escalable diseñada para integrarse en el futuro con sensores de piso y cámaras de reconocimiento de patentes.
+```
+Parkings-Together/
+├── apps/
+│   ├── web/           ← Next.js 14 — Frontend PWA + BFF
+│   ├── ms-mapas/      ← Microservicio de mapas (puerto 3002)
+│   ├── ms-reservas/   ← Microservicio de reservas (puerto 3003)
+│   └── auth/          ← Microservicio de autenticación (puerto 3001)
+└── packages/
+    └── supabase-db/   ← Paquete compartido: cliente Supabase (Singleton)
+```
+
+---
+
+## Arquitectura del Sistema
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLIENTE (Browser)                         │
+│              PWA Next.js — Leaflet Map — Supabase Auth          │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ HTTP (same-origin)
+┌──────────────────────────▼──────────────────────────────────────┐
+│                    BFF — apps/web/app/api/                       │
+│   /api/mapas    /api/reservas    /api/pagos    /api/favoritos    │
+│                  (JWT injection + orchestration)                  │
+└──────┬──────────────────┬──────────────────────┬────────────────┘
+       │                  │                      │
+┌──────▼──────┐  ┌────────▼────────┐  ┌──────────▼──────────────┐
+│  ms-mapas   │  │  ms-reservas    │  │        auth              │
+│  port:3002  │  │   port:3003     │  │      port:3001           │
+│ MVC+Repo    │  │  Saga+CQRS+Repo │  │   MVC+Repository         │
+└──────┬──────┘  └────────┬────────┘  └──────────┬──────────────┘
+       │                  │                       │
+       └──────────────────┴───────────────────────┘
+                          │
+              ┌───────────▼───────────┐
+              │  Supabase (PostgreSQL) │
+              │  PostGIS + Realtime    │
+              └───────────────────────┘
+```
+
+---
+
+## Patrones de Diseño Implementados
+
+| Patrón            | Categoría    | Ubicación                                          |
+|-------------------|--------------|-----------------------------------------------------|
+| Repository        | Arquitectural | `apps/*/repositories/*.repository.js`              |
+| Service Layer     | Arquitectural | `apps/*/services/*.service.js`                     |
+| Controller (MVC)  | Arquitectural | `apps/ms-mapas/src/controllers/`, `apps/auth/src/` |
+| Saga + CQRS       | Comportamental | `apps/ms-reservas/.../services/reserva.service.js` |
+| Observer          | Comportamental | `apps/web/src/components/Navbar.js`                |
+| Strategy          | Comportamental | `apps/web/src/lib/payments.js`                     |
+| Singleton         | Creacional    | `packages/supabase-db/index.js`                    |
+| Facade            | Estructural   | `apps/web/src/lib/api.js`                          |
+| BFF               | Arquitectural | `apps/web/app/api/`                                |
+
+Ver documentación completa: [`docs/PATRONES_DISEÑO.md`](docs/PATRONES_DISEÑO.md)
+
+---
+
+## Características Principales
+
+- **Semaforo de Ocupación en Tiempo Real:** Verde/Amarillo/Rojo impulsado por Supabase Realtime (WebSockets).
+- **Reservas con Saga:** Transacciones compensatorias para garantizar consistencia entre reservas y ocupación.
+- **Pagos Multi-Proveedor:** Mock (desarrollo), Efectivo y Webpay (Transbank) mediante Strategy Pattern.
+- **Mapa Interactivo:** Leaflet.js con marcadores geolocalizados y filtros avanzados.
+- **Modelo P2P:** Conductores y arrendadores con roles y dashboards independientes.
+- **Autenticación Centralizada:** JWT con Supabase Auth y RLS (Row Level Security) en PostgreSQL.
+
+---
+
+## Instalación y Configuración
+
+### Prerequisitos
+- Node.js 18+
+- npm 9+
+
+### Instalación
+
+```bash
+git clone https://github.com/jeffplop/Parkings-Together.git
+cd Parkings-Together
+npm install
+```
+
+### Variables de Entorno
+
+Cada app requiere su propio `.env.local`. Plantilla base para todas:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
+SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
+```
+
+### Ejecutar todo el monorepo
+
+```bash
+# Todos los servicios en paralelo (Turborepo)
+npm run dev
+```
+
+### Ejecutar servicios individuales
+
+```bash
+# Frontend + BFF (puerto 3000)
+cd apps/web && npm run dev
+
+# Microservicio de mapas (puerto 3002)
+cd apps/ms-mapas && npm run dev
+
+# Microservicio de reservas (puerto 3003)
+cd apps/ms-reservas && npm run dev
+
+# Microservicio de autenticación (puerto 3001)
+cd apps/auth && npm run dev
+```
+
+---
+
+## Tests
+
+```bash
+# Tests del BFF/frontend (62 tests)
+cd apps/web && npm test
+
+# Tests del microservicio de reservas (Saga/CQRS)
+cd apps/ms-reservas && npm test
+```
 
 ---
 
 ## Stack Tecnológico
 
-El proyecto está construido sobre una arquitectura moderna, escalable y orientada a la nube para garantizar respuestas de baja latencia:
-
-* **Frontend y API Routes:** Next.js (React)
-* **Base de Datos, Realtime y Auth:** Supabase (PostgreSQL + PostGIS para consultas geoespaciales)
-* **Despliegue y Hosting (Edge):** Vercel
-* **Motor de Predicción (Microservicio):** Python
-* **Control de Versiones y CI/CD:** GitHub
+| Tecnología     | Uso                                                  |
+|----------------|------------------------------------------------------|
+| Next.js 14     | Frontend PWA + BFF (API Routes)                      |
+| React 18       | UI reactiva con hooks                                |
+| Supabase       | PostgreSQL + Auth + Realtime (WebSockets) + PostGIS  |
+| Leaflet.js     | Mapas interactivos con geolocalización               |
+| TailwindCSS    | Estilos utilitarios                                  |
+| Turborepo      | Gestión del monorepo con caché de builds             |
+| Vercel         | Despliegue + CI/CD automático                        |
+| Jest           | Framework de tests unitarios                         |
 
 ---
 
-## Estructura de la Documentación
+## Despliegue
 
-Para comprender a fondo la lógica, arquitectura y reglas comerciales de este proyecto, revisa los siguientes documentos adjuntos en la raíz de este repositorio:
+- **URL producción:** https://parkings-web.vercel.app
+- **Plataforma:** Vercel (deploy automático desde `master`)
+- **Base de datos:** Supabase (PostgreSQL 17 con PostGIS)
+- **CI/CD:** GitHub Actions + Vercel webhooks
 
-1. [Contexto Técnico y Arquitectura](docs/context.md): Detalles sobre el flujo de datos, la justificación del stack tecnológico y la estructuración de los módulos.
-2. [Product Requirements Document](docs/prd_business.md): Reglas de negocio, modelo de monetización, alcance del producto final y métricas de éxito (KPIs).
+---
+
+## READMEs por Componente
+
+- [`apps/web/README.md`](apps/web/README.md) — Frontend PWA + BFF
+- [`apps/ms-mapas/README.md`](apps/ms-mapas/README.md) — Microservicio de Mapas
+- [`apps/ms-reservas/README.md`](apps/ms-reservas/README.md) — Microservicio de Reservas
+- [`apps/auth/README.md`](apps/auth/README.md) — Microservicio de Autenticación
+
+## Documentación Técnica
+
+- [`docs/PATRONES_DISEÑO.md`](docs/PATRONES_DISEÑO.md) — Patrones de diseño implementados
+- [`docs/ESTRATEGIA_BRANCHING.md`](docs/ESTRATEGIA_BRANCHING.md) — Estrategia de branching y flujo de trabajo
+- [`repositorios.txt`](repositorios.txt) — URLs de todos los componentes
+- [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) — Documentación técnica detallada
+- [`docs/UNIT_TESTS.md`](docs/UNIT_TESTS.md) — Documentación de tests unitarios
+
+---
+
+## Branching
+
+- **Rama de producción:** `master`
+- **Rama de desarrollo:** `claude/inspiring-rubin-WVJbv`
+- **PRs:** 13+ pull requests documentados
+- Ver: [`docs/ESTRATEGIA_BRANCHING.md`](docs/ESTRATEGIA_BRANCHING.md)

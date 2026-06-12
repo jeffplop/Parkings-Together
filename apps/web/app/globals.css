@@ -28,7 +28,7 @@
 /* ── RESET & BASE ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overscroll-behavior: none; }
 
 body {
   background-color: var(--bg-dark);
@@ -269,9 +269,4 @@ a {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
-}
-
-@keyframes shimmer {
-  0% { background-position: -200%; }
-  100% { background-position: 200%; }
 }

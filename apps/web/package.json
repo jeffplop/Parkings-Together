@@ -6,13 +6,16 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
-    "test": "node --test tests/api.test.js"
+    "test": "node --test tests/api.test.js",
+    "test:unit": "jest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@hookform/resolvers": "^5.4.0",
     "@parkings/supabase-db": "^1.0.0",
     "leaflet": "^1.9.4",
     "leaflet.heat": "^0.2.0",
+    "leaflet.markercluster": "^1.5.3",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",

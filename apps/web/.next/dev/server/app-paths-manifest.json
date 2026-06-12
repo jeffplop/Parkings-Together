@@ -1,8 +1,0 @@
-{
-  "/auth/page": "app/auth/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/mapa/page": "app/mapa/page.js",
-  "/page": "app/page.js",
-  "/profile/page": "app/profile/page.js",
-  "/sobre-mi/page": "app/sobre-mi/page.js"
-}

@@ -1,0 +1,6 @@
+-- ============================================================================
+-- 009_seed_demo_estacionamientos_rm.sql  (v2)
+-- Imágenes: picsum.photos/seed/{id}/800/500 — sin CORS, soporta jpg/webp/png.
+-- Para limpiar todo el demo: DELETE FROM estacionamientos WHERE user_id IS NULL;
+-- ============================================================================
+-- Replaced by 011_seed_estacionamientos_v2.sql — kept for reference only.

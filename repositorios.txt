@@ -1,47 +1,66 @@
-================================================================
-  PARKINGS TOGETHER — Repositorios de los componentes
-================================================================
+=============================================================
+PARKINGS TOGETHER — REPOSITORIOS DE COMPONENTES
+=============================================================
 
-Estructura: MONOREPO (un único repositorio Git con workspaces npm).
-Justificación: facilita el versionado atómico, compartir el paquete
-de acceso a datos (packages/supabase-db) y mantener consistencia entre
-el frontend (BFF) y los microservicios. Cada componente es desplegable
-de forma independiente (cada uno es una app Next.js con su propio puerto).
+REPOSITORIO PRINCIPAL
+URL: https://github.com/jeffplop/Parkings-Together
+Descripción: Monorepo principal del proyecto Parkings Together.
+             Contiene frontend, BFF, microservicios y paquetes compartidos.
 
-----------------------------------------------------------------
- Repositorio principal (monorepo)
-----------------------------------------------------------------
-https://github.com/jeffplop/compartiendo-espacio
+COMPONENTES
+-----------
 
-----------------------------------------------------------------
- Componentes (enlaces profundos dentro del monorepo)
-----------------------------------------------------------------
-Frontend + BFF (apps/web, puerto 3000)
-  https://github.com/jeffplop/compartiendo-espacio/tree/master/apps/web
+1. FRONTEND + BFF (Backend For Frontend)
+   Carpeta: apps/web
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/apps/web
+   Descripción: Aplicación Next.js 14 que actúa como frontend PWA y BFF.
+                Incluye API routes para reservas, mapas, pagos y autenticación.
+                Desplegado en: https://parkings-web.vercel.app
 
-Microservicio de Autenticación (apps/auth, puerto 3001)
-  https://github.com/jeffplop/compartiendo-espacio/tree/master/apps/auth
+2. MICROSERVICIO DE MAPAS (ms-mapas)
+   Carpeta: apps/ms-mapas
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/apps/ms-mapas
+   Descripción: Microservicio REST para búsqueda y gestión de estacionamientos.
+                Implementa patrón Controller→Service→Repository.
+                Expone: GET/POST/PATCH/DELETE /api/v1/search
 
-Microservicio de Estacionamientos / Mapas (apps/ms-mapas, puerto 3002)
-  https://github.com/jeffplop/compartiendo-espacio/tree/master/apps/ms-mapas
+3. MICROSERVICIO DE RESERVAS (ms-reservas)
+   Carpeta: apps/ms-reservas
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/apps/ms-reservas
+   Descripción: Microservicio de reservas con patrón Saga/CQRS.
+                Implementa transacciones compensatorias para consistencia.
+                Expone: POST /api/v1/reserve
 
-Microservicio de Reservas (apps/ms-reservas, puerto 3003)
-  https://github.com/jeffplop/compartiendo-espacio/tree/master/apps/ms-reservas
+4. MICROSERVICIO DE AUTENTICACIÓN (auth)
+   Carpeta: apps/auth
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/apps/auth
+   Descripción: Microservicio de autenticación y registro de usuarios.
+                Patrón MVC con capas Controller→Service→Repository.
+                Expone: POST /api/v1/auth/login, POST /api/v1/auth/register
 
-Paquete compartido de acceso a datos (packages/supabase-db)
-  https://github.com/jeffplop/compartiendo-espacio/tree/master/packages/supabase-db
+5. PAQUETE COMPARTIDO (supabase-db)
+   Carpeta: packages/supabase-db
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/packages/supabase-db
+   Descripción: Paquete NPM compartido con cliente Supabase (patrón Singleton).
+                Usado por todos los microservicios y el BFF.
 
-----------------------------------------------------------------
- Documentación y entregables
-----------------------------------------------------------------
-Especificación de la API (Swagger / OpenAPI)
-  https://github.com/jeffplop/compartiendo-espacio/tree/master/docs/api
+RAMA DE DESARROLLO
+------------------
+Branch activo: claude/inspiring-rubin-WVJbv
+PR más reciente: https://github.com/jeffplop/Parkings-Together/pull/13
 
-Entrega Parcial 3 (diagrama, persistencia, informe de pruebas)
-  https://github.com/jeffplop/compartiendo-espacio/tree/master/ENTREGA_PARCIAL3
+DESPLIEGUE
+----------
+URL producción: https://parkings-web.vercel.app
+Plataforma: Vercel (CI/CD automático desde master)
+Base de datos: Supabase (PostgreSQL 17 con PostGIS)
 
-================================================================
-Nota: si la evaluación exige un repositorio separado por microservicio,
-cada carpeta apps/<servicio> puede extraerse a su propio repo con
-`git subtree split`. Confirmar el formato esperado con el docente.
-================================================================
+DOCUMENTACIÓN Y ENTREGABLES
+---------------------------
+API REST (Swagger / OpenAPI + Postman)
+   Carpeta: docs/api
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/docs/api
+
+Entrega Parcial 3 (diagrama de arquitectura, persistencia e informe de pruebas)
+   Carpeta: ENTREGA_PARCIAL3
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/ENTREGA_PARCIAL3

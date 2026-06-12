@@ -1,5 +1,5 @@
 {
-  "name": "compartiendo-espacio",
+  "name": "parkings-together",
   "private": true,
   "packageManager": "npm@10.2.4",
   "workspaces": [
@@ -10,6 +10,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "test": "jest",
     "clean": "turbo run clean && npx rimraf node_modules"
   },
   "devDependencies": {
@@ -22,7 +23,7 @@
     "turbo": "latest"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

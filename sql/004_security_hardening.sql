@@ -79,7 +79,7 @@ CREATE TRIGGER on_auth_user_created
 --    SECURITY DEFINER: ejecuta con privilegios controlados, pero
 --    valida internamente que el conductor es el auth.uid() actual.
 -- ───────────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION public.reservar_estacionamiento(p_estacionamiento_id uuid)
+CREATE OR REPLACE FUNCTION public.reservar_estacionamiento(p_estacionamiento_id integer)
 RETURNS public.reservas
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -120,8 +120,8 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.reservar_estacionamiento(uuid) FROM public, anon;
-GRANT EXECUTE ON FUNCTION public.reservar_estacionamiento(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.reservar_estacionamiento(integer) FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.reservar_estacionamiento(integer) TO authenticated;
 
 -- ───────────────────────────────────────────────────────────────
 -- A.2) RPC para cancelar una reserva activa y liberar el cupo

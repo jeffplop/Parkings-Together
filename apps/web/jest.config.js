@@ -8,8 +8,7 @@ const createJestConfig = nextJest({
 // Add any custom config to be passed to Jest
 const customJestConfig = {
   testEnvironment: 'node',
-  // Solo correr nuestro test para no chocar con el api.test.js original que usa node:test
-  testMatch: ['**/*.circuitbreaker.test.js'],
+  testMatch: ['**/tests/pricing.test.js', '**/tests/payments.test.js', '**/tests/geocoding.test.js'],
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

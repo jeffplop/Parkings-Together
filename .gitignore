@@ -9,11 +9,10 @@ out/
 # turbo
 .turbo
 
-# test coverage (generado por jest --coverage)
-coverage/
-
-# env files
-.env*.local
+# env files (NUNCA commitear secretos; usar .env.example como plantilla)
+.env
+.env.*
+!.env.example
 
 # debug
 npm-debug.log*
@@ -22,3 +21,5 @@ yarn-error.log*
 
 # Claude Code local settings (may contain tokens)
 .claude/settings.json
+# Reportes de cobertura (regenerables con: npx jest --coverage)
+coverage/

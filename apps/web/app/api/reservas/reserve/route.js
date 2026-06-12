@@ -58,21 +58,49 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { parking_id, user_id, start_time } = body;
+    const { parking_id, user_id, fecha_inicio, fecha_fin, spot_label, duration_hours } = body;
     if (!parking_id || !user_id) {
       return NextResponse.json({ success: false, error: 'Faltan parking_id o user_id.' }, { status: 400 });
     }
 
     const db = getSupabaseWithToken(token);
 
-    // Transacción atómica vía RPC SECURITY DEFINER: verifica disponibilidad con
-    // bloqueo de fila (anti doble-reserva), inserta la reserva del auth.uid() y
-    // incrementa la ocupación, todo en una sola transacción del lado de Postgres.
-    // Sustituye a la Saga manual, que RLS bloqueaba (un conductor no es dueño del
-    // estacionamiento y no podía actualizar occupied_spots).
-    const { data: reserva, error } = await db.rpc('reservar_estacionamiento', {
-      p_estacionamiento_id: parking_id,
-    });
+    // Dos modos sobre la misma transacción atómica (RPC SECURITY DEFINER):
+    //  - PRO (reserva anticipada): si llegan fecha_inicio y fecha_fin, reserva una
+    //    ventana de tiempo validando capacidad por solapamiento; queda 'pendiente'
+    //    hasta que el arrendador la confirme.
+    //  - INSTANTÁNEA (legacy): sin fechas, ocupa un cupo ahora e incrementa
+    //    occupied_spots. Se conserva para el flujo de "estacionar ya".
+    let reserva, error;
+    // estacionamientos.id es integer en producción — coercionar explícitamente
+    const estId = Number(parking_id);
+    // Compute fecha_inicio / fecha_fin from duration_hours when not explicitly provided.
+    // Add 30s buffer when no explicit start is given — prevents the Postgres past-check
+    // from triggering due to clock skew / network latency between client and server.
+    const resolvedInicio = fecha_inicio ?? new Date(Date.now() + 30_000).toISOString();
+    const resolvedFin = fecha_fin ?? (duration_hours
+      ? new Date(Date.now() + duration_hours * 3600 * 1000).toISOString()
+      : null);
+
+    if (resolvedFin) {
+      ({ data: reserva, error } = await db.rpc('crear_reserva_pro', {
+        p_estacionamiento_id: estId,
+        p_fecha_inicio: resolvedInicio,
+        p_fecha_fin: resolvedFin,
+      }));
+    } else {
+      ({ data: reserva, error } = await db.rpc('reservar_estacionamiento', {
+        p_estacionamiento_id: estId,
+      }));
+    }
+
+    // Attach spot_label to the reservation row if the RPC returned an id
+    if (!error && reserva && spot_label) {
+      const reservaId = typeof reserva === 'object' ? reserva.id ?? reserva : reserva;
+      if (reservaId) {
+        await db.from('reservas').update({ spot_label }).eq('id', reservaId);
+      }
+    }
 
     if (error) {
       const lleno = /lleno/i.test(error.message);

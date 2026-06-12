@@ -1,10 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@parkings/supabase-db';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { api } from '../../src/lib/api';
+import ReviewModal from '../../src/components/ReviewModal';
 
 export default function ProfilePage() {
+  const searchParams = useSearchParams();
   const [session, setSession] = useState(null);
   const [perfil, setPerfil] = useState({ nombre: '', telefono: '', requiere_pmr: false, avatar_url: '' });
   const [vehiculos, setVehiculos] = useState([]);
@@ -12,16 +15,62 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [nuevoEmail, setNuevoEmail] = useState('');
-  const [activeTab, setActiveTab] = useState('personales'); // personales, vehiculos, pmr
+  const [activeTab, setActiveTab] = useState(searchParams?.get('tab') || 'personales'); // personales, vehiculos, pmr
   
   const [nuevoVehiculo, setNuevoVehiculo] = useState({ patente: '', marca: '', modelo: '', color: '' });
-  
+
+  const [reservas, setReservas] = useState([]);
+  const [loadingReservas, setLoadingReservas] = useState(false);
+  const [favoritos, setFavoritos] = useState([]);
+  const [loadingFavs, setLoadingFavs] = useState(false);
+
   const router = useRouter();
+
+  const cargarReservas = async () => {
+    setLoadingReservas(true);
+    const res = await api.reservas.listar('conductor');
+    if (res.success) setReservas(res.data || []);
+    setLoadingReservas(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'reservas') cargarReservas();
+    if (activeTab === 'favoritos') {
+      setLoadingFavs(true);
+      api.favoritos.listar().then(res => {
+        if (res.success) setFavoritos(res.data || []);
+        setLoadingFavs(false);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const handleQuitarFavorito = async (estacionamientoId) => {
+    await api.favoritos.quitar(estacionamientoId);
+    setFavoritos(prev => prev.filter(f => (f.estacionamiento?.id ?? f.estacionamiento_id) !== estacionamientoId));
+    toast.success('Eliminado de favoritos');
+  };
+
+  const handleCancelarReserva = async (id) => {
+    const res = await api.reservas.cancelar(id);
+    if (res.success) { toast.success('Reserva cancelada'); cargarReservas(); }
+    else toast.error(res.error || 'No se pudo cancelar');
+  };
+
+  const [reviewModal, setReviewModal] = useState(null); // { reservaId }
+
+  const handleSubmitReview = async ({ reservaId, stars, comentario, photoUrl }) => {
+    const res = await api.reservas.calificar(reservaId, stars, comentario, photoUrl);
+    if (!res.success) throw new Error(res.error || 'No se pudo calificar');
+    cargarReservas();
+  };
+
+  const fmtFecha = (f) => f ? new Date(f).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        router.push('/auth');
+        router.push('/auth?redirectTo=/profile');
       } else {
         setSession(session);
         fetchPerfilData(session.user.id);
@@ -29,7 +78,7 @@ export default function ProfilePage() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) router.push('/auth');
+      if (!session) router.push('/auth?redirectTo=/profile');
       else setSession(session);
     });
 
@@ -56,12 +105,12 @@ export default function ProfilePage() {
         if (vehiculosError) throw vehiculosError;
         if (vehiculosData) setVehiculos(vehiculosData);
       } catch (vehiculosErr) {
-        console.error('Error cargando vehículos (puede no existir la tabla):', vehiculosErr);
+        if (process.env.NODE_ENV === 'development') console.error('Error cargando vehículos (puede no existir la tabla):', vehiculosErr);
         setVehiculos([]);
       }
 
     } catch (error) {
-      console.error(error);
+      if (process.env.NODE_ENV === 'development') console.error(error);
       toast.error('Error al cargar datos del perfil');
     } finally {
       setLoading(false);
@@ -114,7 +163,7 @@ export default function ProfilePage() {
     try {
       const { error } = await supabase.from('vehiculos').delete().eq('id', id);
       if (error) throw error;
-      setVehiculos(vehiculos.filter(v => v.id !== id));
+      setVehiculos(prev => prev.filter(v => v.id !== id));
       toast.success('Vehículo removido');
     } catch (error) {
       toast.error('Error al remover vehículo');
@@ -123,16 +172,16 @@ export default function ProfilePage() {
 
   const handleTogglePMR = async () => {
     const newValue = !perfil.requiere_pmr;
-    setPerfil({ ...perfil, requiere_pmr: newValue });
+    setPerfil(prev => ({ ...prev, requiere_pmr: newValue }));
     try {
       const { error } = await supabase.from('perfiles').upsert({
         id: session.user.id,
         requiere_pmr: newValue
       });
       if (error) throw error;
-      toast.success(newValue ? 'Filtro PMR Activado' : 'Filtro PMR Desactivado');
+      toast.success(newValue ? 'Mostrando solo estacionamientos accesibles' : 'Mostrando todos los estacionamientos');
     } catch (error) {
-      setPerfil({ ...perfil, requiere_pmr: !newValue }); // rollback
+      setPerfil(prev => ({ ...prev, requiere_pmr: !newValue }));
       toast.error('Error al actualizar preferencias');
     }
   };
@@ -150,7 +199,7 @@ export default function ProfilePage() {
       const avatarUrl = `${publicUrl}?t=${Date.now()}`;
       const { error: updateError } = await supabase.from('perfiles').upsert({ id: session.user.id, avatar_url: avatarUrl });
       if (updateError) throw updateError;
-      setPerfil({ ...perfil, avatar_url: avatarUrl });
+      setPerfil(prev => ({ ...prev, avatar_url: avatarUrl }));
       toast.success('Avatar actualizado');
     } catch (error) {
       toast.error(error.message || 'Error al subir avatar');
@@ -191,7 +240,7 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-wrapper">
-      <Toaster position="top-right" toastOptions={{ style: { background: '#1e293b', color: '#fff', border: '1px solid #3b82f6' } }} />
+      {reviewModal && <ReviewModal reservaId={reviewModal.reservaId} onClose={() => setReviewModal(null)} onSubmit={handleSubmitReview} />}
       <div className="cyber-grid-bg"></div>
 
       <div className="profile-container">
@@ -219,9 +268,9 @@ export default function ProfilePage() {
           <div className="role-badge" style={{
             padding: '8px 16px',
             borderRadius: '12px',
-            border: `1px solid ${perfil.rol === 'anfitrion' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
-            background: perfil.rol === 'anfitrion' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(59, 130, 246, 0.1)',
-            color: perfil.rol === 'anfitrion' ? '#f59e0b' : '#60a5fa',
+            border: `1px solid ${perfil.rol === 'arrendador' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+            background: perfil.rol === 'arrendador' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+            color: perfil.rol === 'arrendador' ? '#f59e0b' : '#60a5fa',
             fontSize: '0.8rem',
             fontWeight: '800',
             letterSpacing: '1px',
@@ -230,8 +279,8 @@ export default function ProfilePage() {
             alignItems: 'center',
             gap: '8px'
           }}>
-            <i className={`fa-solid ${perfil.rol === 'anfitrion' ? 'fa-building' : 'fa-car'}`}></i>
-            {perfil.rol === 'anfitrion' ? 'ANFITRIÓN' : 'CONDUCTOR'}
+            <i className={`fa-solid ${perfil.rol === 'arrendador' ? 'fa-building' : 'fa-car'}`}></i>
+            {perfil.rol === 'arrendador' ? 'ARRENDADOR' : 'CONDUCTOR'}
           </div>
 
           <div className="nav-tabs">
@@ -240,6 +289,12 @@ export default function ProfilePage() {
             </button>
             <button className={`tab-btn ${activeTab === 'vehiculos' ? 'active' : ''}`} onClick={() => setActiveTab('vehiculos')}>
               <i className="fa-solid fa-car"></i> Mis Vehículos ({vehiculos.length})
+            </button>
+            <button className={`tab-btn ${activeTab === 'reservas' ? 'active' : ''}`} onClick={() => setActiveTab('reservas')}>
+              <i className="fa-solid fa-calendar-check"></i> Mis Reservas
+            </button>
+            <button className={`tab-btn ${activeTab === 'favoritos' ? 'active' : ''}`} onClick={() => setActiveTab('favoritos')}>
+              <i className="fa-solid fa-star"></i> Favoritos
             </button>
             <button className={`tab-btn ${activeTab === 'pmr' ? 'active' : ''}`} onClick={() => setActiveTab('pmr')}>
               <i className="fa-solid fa-wheelchair"></i> Accesibilidad
@@ -268,10 +323,10 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 <div className="info-card">
-                  <div className="info-card-icon role"><i className={`fa-solid ${perfil.rol === 'anfitrion' ? 'fa-building' : 'fa-car'}`}></i></div>
+                  <div className="info-card-icon role"><i className={`fa-solid ${perfil.rol === 'arrendador' ? 'fa-building' : 'fa-car'}`}></i></div>
                   <div className="info-card-data">
                     <span className="info-label">TIPO DE CUENTA</span>
-                    <span className="info-value">{perfil.rol === 'anfitrion' ? 'Anfitrión' : 'Conductor'}</span>
+                    <span className="info-value">{perfil.rol === 'arrendador' ? 'Arrendador' : 'Conductor'}</span>
                   </div>
                 </div>
                 <div className="info-card">
@@ -315,7 +370,7 @@ export default function ProfilePage() {
           {activeTab === 'vehiculos' && (
             <div className="tab-pane fade-in">
               <h2>Flota Registrada</h2>
-              <p className="subtitle-desc">El anfitrión necesita estos datos para autorizar tu ingreso.</p>
+              <p className="subtitle-desc">El arrendador necesita estos datos para autorizar tu ingreso.</p>
               
               <div className="vehicles-list">
                 {vehiculos.length === 0 ? (
@@ -357,6 +412,116 @@ export default function ProfilePage() {
             </div>
           )}
 
+          {activeTab === 'reservas' && (
+            <div className="tab-pane fade-in">
+              <h2>Mis Reservas</h2>
+              <p className="subtitle-desc">Historial y reservas activas. Califica las completadas y gestiona las próximas.</p>
+
+              {loadingReservas ? (
+                <div className="empty-state"><i className="fa-solid fa-spinner fa-spin"></i> Cargando reservas…</div>
+              ) : reservas.length === 0 ? (
+                <div className="empty-state">Aún no tienes reservas. Encuentra un estacionamiento en el mapa.</div>
+              ) : (
+                <div className="vehicles-list">
+                  {reservas.map(r => (
+                    <div key={r.id} className="vehicle-card reserva-card">
+                      <div className="v-details" style={{ marginLeft: 0 }}>
+                        <strong>{r.estacionamiento?.nombre || 'Estacionamiento'}</strong>
+                        <span>{r.estacionamiento?.comuna ? `${r.estacionamiento.comuna} · ` : ''}{fmtFecha(r.fecha_inicio)} → {fmtFecha(r.fecha_fin)}</span>
+                        <span>
+                          {r.precio_total != null && <>💲 ${Number(r.precio_total).toLocaleString('es-CL')} · </>}
+                          <span className={`estado-badge estado-${r.estado}`}>{r.estado}</span>
+                          {r.calificacion ? <> · {'★'.repeat(r.calificacion)}</> : null}
+                        </span>
+                      </div>
+                      <div className="reserva-actions">
+                        {r.review_photo_url && (
+                          <img src={r.review_photo_url} alt="foto reseña" style={{width:'48px',height:'48px',objectFit:'cover',borderRadius:'8px',border:'1px solid rgba(255,255,255,0.08)'}} />
+                        )}
+                        {(r.estado === 'pendiente' || r.estado === 'confirmada') && (
+                          <button onClick={() => handleCancelarReserva(r.id)} className="btn-icon-danger" title="Cancelar">
+                            <i className="fa-solid fa-ban"></i>
+                          </button>
+                        )}
+                        {r.estado === 'completada' && !r.calificacion && (
+                          <button onClick={() => setReviewModal({ reservaId: r.id })} className="btn-cyber-secondary" style={{ padding: '8px 14px' }}>
+                            <i className="fa-solid fa-star"></i> Calificar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'favoritos' && (
+            <div className="tab-pane fade-in">
+              <h2>Estacionamientos Favoritos</h2>
+              <p className="subtitle-desc">Tus lugares guardados. Accede rápidamente desde aquí o desde el mapa.</p>
+
+              {loadingFavs ? (
+                <div className="empty-state"><i className="fa-solid fa-spinner fa-spin"></i> Cargando favoritos…</div>
+              ) : favoritos.length === 0 ? (
+                <div className="empty-state">
+                  <i className="fa-solid fa-star" style={{ fontSize: '2rem', color: '#334155', marginBottom: '12px' }}></i>
+                  <p>Aún no tienes favoritos. Toca la estrella en cualquier estacionamiento del mapa.</p>
+                </div>
+              ) : (
+                <div className="vehicles-list">
+                  {favoritos.map(f => {
+                    const est = f.estacionamiento || {};
+                    const id = est.id ?? f.estacionamiento_id;
+                    const libres = est.total_spots != null ? Math.max((est.total_spots || 0) - (est.occupied_spots || 0), 0) : null;
+                    return (
+                      <div key={f.id} className="fav-card">
+                        {est.photos && est.photos.length > 0 ? (
+                          <img src={est.photos[0]} alt={est.nombre} className="fav-thumb" />
+                        ) : (
+                          <div className="fav-icon-box">
+                            <i className="fa-solid fa-square-parking"></i>
+                          </div>
+                        )}
+                        <div className="fav-info">
+                          <span className="fav-name">{est.nombre || 'Estacionamiento'}</span>
+                          <span className="fav-meta">
+                            {est.comuna ? `${est.comuna} · ` : ''}
+                            {est.precio_hora != null ? (est.precio_hora === 0 ? 'Gratuito' : `$${Number(est.precio_hora).toLocaleString('es-CL')}/hr`) : ''}
+                            {est.es_pmr ? ' · ♿' : ''}
+                            {libres != null ? ` · ${libres > 0 ? `${libres} libre${libres > 1 ? 's' : ''}` : 'Sin cupos'}` : ''}
+                          </span>
+                          {est.rating > 0 && (
+                            <span className="fav-rating">
+                              {'★'.repeat(Math.round(est.rating))}{'☆'.repeat(5 - Math.round(est.rating))} {est.rating}
+                            </span>
+                          )}
+                        </div>
+                        <div className="fav-actions">
+                          {est.lat && est.lng && (
+                            <a href={`/mapa?lat=${est.lat}&lng=${est.lng}&id=${id}`} className="fav-btn fav-btn-map" title="Ir al mapa">
+                              <i className="fa-solid fa-map-pin"></i> Ir al mapa
+                            </a>
+                          )}
+                          <a href={`/mapa?id=${id}&reservar=1`} className="fav-btn fav-btn-book" title="Reservar">
+                            <i className="fa-solid fa-calendar-plus"></i> Reservar
+                          </a>
+                          <button
+                            onClick={() => handleQuitarFavorito(id)}
+                            className="fav-btn fav-btn-del"
+                            title="Quitar de favoritos"
+                          >
+                            <i className="fa-solid fa-star-slash"></i>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'pmr' && (
             <div className="tab-pane fade-in">
               <h2>Preferencias de Inclusión</h2>
@@ -364,8 +529,8 @@ export default function ProfilePage() {
                 <div className="pmr-info">
                   <i className="fa-solid fa-wheelchair"></i>
                   <div>
-                    <h3>Plazas de Movilidad Reducida (PMR)</h3>
-                    <p>Filtra el mapa para mostrar exclusivamente estacionamientos con garantía de accesibilidad.</p>
+                    <h3>Estacionamientos accesibles</h3>
+                    <p>Filtra el mapa para mostrar solo estacionamientos con acceso garantizado para personas con movilidad reducida.</p>
                   </div>
                 </div>
                 <div className="toggle-switch">
@@ -471,6 +636,35 @@ export default function ProfilePage() {
         .toggle-switch label:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
         .toggle-switch input:checked + label { background-color: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); }
         .toggle-switch input:checked + label:before { transform: translateX(26px); }
+
+        /* Reservas */
+        .reserva-card { gap: 15px; }
+        .reserva-actions { display: flex; align-items: center; gap: 10px; }
+        .estado-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+        .estado-pendiente { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+        .estado-confirmada { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .estado-activa { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .estado-completada { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .estado-cancelada { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+        /* Favoritos enhanced cards */
+        .fav-card { display: flex; align-items: center; gap: 16px; padding: 18px 20px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; transition: 0.3s; }
+        .fav-card:hover { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.04); }
+        .fav-thumb { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.08); }
+        .fav-icon-box { width: 64px; height: 64px; border-radius: 12px; background: rgba(245,158,11,0.1); color: #f59e0b; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+        .fav-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+        .fav-name { color: #f8fafc; font-weight: 800; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .fav-meta { color: #94a3b8; font-size: 0.82rem; }
+        .fav-rating { color: #f59e0b; font-size: 0.78rem; }
+        .fav-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .fav-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; border: none; cursor: pointer; transition: 0.2s; text-decoration: none; white-space: nowrap; }
+        .fav-btn-map { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.25); }
+        .fav-btn-map:hover { background: rgba(59,130,246,0.22); }
+        .fav-btn-book { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
+        .fav-btn-book:hover { background: rgba(16,185,129,0.22); }
+        .fav-btn-del { background: transparent; color: #ef4444; border: 1px solid rgba(239,68,68,0.2); padding: 8px 10px; }
+        .fav-btn-del:hover { background: rgba(239,68,68,0.1); }
+        @media (max-width: 600px) { .fav-actions { flex-direction: column; } .fav-btn { font-size: 0.72rem; padding: 6px 10px; } }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
