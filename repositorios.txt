@@ -1,0 +1,47 @@
+================================================================
+  PARKINGS TOGETHER — Repositorios de los componentes
+================================================================
+
+Estructura: MONOREPO (un único repositorio Git con workspaces npm).
+Justificación: facilita el versionado atómico, compartir el paquete
+de acceso a datos (packages/supabase-db) y mantener consistencia entre
+el frontend (BFF) y los microservicios. Cada componente es desplegable
+de forma independiente (cada uno es una app Next.js con su propio puerto).
+
+----------------------------------------------------------------
+ Repositorio principal (monorepo)
+----------------------------------------------------------------
+https://github.com/jeffplop/compartiendo-espacio
+
+----------------------------------------------------------------
+ Componentes (enlaces profundos dentro del monorepo)
+----------------------------------------------------------------
+Frontend + BFF (apps/web, puerto 3000)
+  https://github.com/jeffplop/compartiendo-espacio/tree/master/apps/web
+
+Microservicio de Autenticación (apps/auth, puerto 3001)
+  https://github.com/jeffplop/compartiendo-espacio/tree/master/apps/auth
+
+Microservicio de Estacionamientos / Mapas (apps/ms-mapas, puerto 3002)
+  https://github.com/jeffplop/compartiendo-espacio/tree/master/apps/ms-mapas
+
+Microservicio de Reservas (apps/ms-reservas, puerto 3003)
+  https://github.com/jeffplop/compartiendo-espacio/tree/master/apps/ms-reservas
+
+Paquete compartido de acceso a datos (packages/supabase-db)
+  https://github.com/jeffplop/compartiendo-espacio/tree/master/packages/supabase-db
+
+----------------------------------------------------------------
+ Documentación y entregables
+----------------------------------------------------------------
+Especificación de la API (Swagger / OpenAPI)
+  https://github.com/jeffplop/compartiendo-espacio/tree/master/docs/api
+
+Entrega Parcial 3 (diagrama, persistencia, informe de pruebas)
+  https://github.com/jeffplop/compartiendo-espacio/tree/master/ENTREGA_PARCIAL3
+
+================================================================
+Nota: si la evaluación exige un repositorio separado por microservicio,
+cada carpeta apps/<servicio> puede extraerse a su propio repo con
+`git subtree split`. Confirmar el formato esperado con el docente.
+================================================================
