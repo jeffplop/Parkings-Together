@@ -2,39 +2,42 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { api } from '../src/lib/api.js';
 
-// Mock global fetch para simular las respuestas de los microservicios sin llamar a la red real
+// Mock global fetch para simular las respuestas del BFF sin llamar a la red real.
+// El BFF consulta route handlers de MISMO ORIGEN (/api/mapas, /api/reservas), que
+// internamente delegan en Supabase; aquí simulamos esa frontera HTTP. Cada respuesta
+// incluye `ok: true` porque fetchWithTimeout() evalúa response.ok antes del cuerpo.
 global.fetch = async (url, options) => {
   const method = options?.method || 'GET';
-  
-  // Mock MS Mapas
-  if (url.includes('3002/api/v1/search')) {
+
+  // Mock BFF → Mapas (route handler /api/mapas/search)
+  if (url.includes('/api/mapas/search')) {
     if (method === 'PATCH') {
       const body = JSON.parse(options.body);
       if (body.occupied_spots > 10) {
-        return { json: async () => ({ success: false, error: 'Excede capacidad' }) };
+        return { ok: true, json: async () => ({ success: false, error: 'Excede capacidad' }) };
       }
-      return { json: async () => ({ success: true, data: { id: body.id, occupied_spots: body.occupied_spots } }) };
+      return { ok: true, json: async () => ({ success: true, data: { id: body.id, occupied_spots: body.occupied_spots } }) };
     }
   }
 
-  // Mock MS Reservas (Saga Flow)
-  if (url.includes('3003/api/v1/reserve')) {
+  // Mock BFF → Reservas (route handler /api/reservas/reserve, flujo Saga)
+  if (url.includes('/api/reservas/reserve')) {
     if (method === 'GET') {
       // Simular verificación de disponibilidad
       const isAvailable = !url.includes('full-parking-id');
-      return { json: async () => ({ success: true, available: isAvailable }) };
+      return { ok: true, json: async () => ({ success: true, available: isAvailable }) };
     }
-    
+
     if (method === 'POST') {
       const body = JSON.parse(options.body);
       if (body.parking_id === 'error-saga') {
-        return { json: async () => ({ success: false, error: 'Fallo simulado en Saga de Reservas' }) };
+        return { ok: true, json: async () => ({ success: false, error: 'Fallo simulado en Saga de Reservas' }) };
       }
-      return { json: async () => ({ success: true, data: { id: 'res-123', estado: 'activa' } }) };
+      return { ok: true, json: async () => ({ success: true, data: { id: 'res-123', estado: 'activa' } }) };
     }
   }
 
-  return { json: async () => ({ success: false, error: 'Not Found' }) };
+  return { ok: false, status: 404, json: async () => ({ success: false, error: 'Not Found' }) };
 };
 
 test('BFF - Mapas: Debería actualizar ocupación correctamente', async (t) => {

@@ -9,6 +9,9 @@ out/
 # turbo
 .turbo
 
+# test coverage (generado por jest --coverage)
+coverage/
+
 # env files
 .env*.local
 
