@@ -119,19 +119,35 @@ paths:
   /api/mapas/search:
     get:
       tags: [BFF · Mapas]
-      summary: Listar / buscar estacionamientos
+      summary: Listar / buscar estacionamientos (o el detalle de uno)
       description: |
-        Lectura pública (RLS `SELECT USING (true)`). Permite filtrar por dueño
-        (`userId`) y por cercanía geográfica (`lat`, `lng`, `radius` en km, cálculo
-        Haversine en memoria).
+        Lectura pública (RLS `SELECT USING (true)`). Si se envía `id`, devuelve el
+        detalle de **un** estacionamiento (`data` como objeto, no array).
+
+        Búsqueda con `lat` + `lng` + `radius` (sin `userId`): usa la función
+        PostGIS `buscar_estacionamientos_radio` (índice GIST, O(log n)) y soporta
+        además `q`, `comuna`, `pmr`, `disponible` y `precioMax` como filtros
+        server-side (`precioMin` se aplica en memoria sobre el resultado).
+
+        Sin `lat/lng/radius`, o con `userId`: consulta directa a `estacionamientos`
+        con los mismos filtros (`q`, `comuna`, `pmr`, `disponible`, `precioMin`,
+        `precioMax`) vía SQL/`ilike`, más filtro Haversine en memoria si además se
+        envían `lat/lng/radius`.
       parameters:
-        - { name: userId, in: query, required: false, schema: { type: string, format: uuid }, description: Filtra por dueño del estacionamiento }
+        - { name: id, in: query, required: false, schema: { type: string, format: uuid }, description: Devuelve el detalle de un solo estacionamiento (data como objeto) }
+        - { name: userId, in: query, required: false, schema: { type: string, format: uuid }, description: Filtra por dueño del estacionamiento (incluye inactivos) }
         - { name: lat, in: query, required: false, schema: { type: number }, example: -33.4489 }
         - { name: lng, in: query, required: false, schema: { type: number }, example: -70.6693 }
         - { name: radius, in: query, required: false, schema: { type: number }, description: Radio en km (1..9998), example: 5 }
+        - { name: q, in: query, required: false, schema: { type: string }, description: Búsqueda por nombre (ilike) }
+        - { name: comuna, in: query, required: false, schema: { type: string }, description: Filtra por comuna (ilike) }
+        - { name: pmr, in: query, required: false, schema: { type: string, enum: ["true"] }, description: "Si es 'true', solo estacionamientos con plaza PMR" }
+        - { name: disponible, in: query, required: false, schema: { type: string, enum: ["true"] }, description: "Si es 'true', solo estacionamientos con cupos libres (occupied_spots < total_spots)" }
+        - { name: precioMin, in: query, required: false, schema: { type: number }, description: Precio por hora mínimo (CLP) }
+        - { name: precioMax, in: query, required: false, schema: { type: number }, description: Precio por hora máximo (CLP) }
       responses:
         '200':
-          description: Lista de estacionamientos
+          description: Lista de estacionamientos (o detalle si se envía `id`)
           content:
             application/json:
               example:
@@ -147,6 +163,11 @@ paths:
                     es_pmr: false
                     precio_hora: 1500
                     user_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff
+        '404':
+          description: No existe un estacionamiento con ese `id`
+          content:
+            application/json:
+              example: { success: false, error: "mensaje del backend", data: null }
         '500':
           description: Error de servidor
           content:
@@ -155,7 +176,10 @@ paths:
     post:
       tags: [BFF · Mapas]
       summary: Crear un estacionamiento
-      description: Requiere JWT. RLS exige rol `anfitrion` y `auth.uid() = user_id`.
+      description: |
+        Requiere JWT. RLS exige rol `anfitrion` y `auth.uid() = user_id`. El
+        `user_id` **se obtiene del token**, no del body — cualquier `userId` que
+        se envíe en el body es ignorado.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -169,7 +193,9 @@ paths:
               lng: -70.6693
               totalSpots: 10
               esPmr: false
-              userId: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff
+              precioHora: 1500
+              comuna: Santiago
+              direccion: Av. Siempre Viva 123
       responses:
         '201':
           description: Creado
@@ -178,27 +204,61 @@ paths:
               example:
                 success: true
                 data: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, nombre: Estacionamiento Centro, occupied_spots: 0, total_spots: 10, precio_hora: 1500 }
-        '400': { description: Faltan campos obligatorios, content: { application/json: { example: { success: false, error: "Faltan campos obligatorios: nombre, lat, lng, userId." } } } }
+        '400': { description: Faltan campos obligatorios o lat/lng inválidos, content: { application/json: { example: { success: false, error: "Faltan campos obligatorios: nombre, lat, lng." } } } }
         '401': { description: No autenticado, content: { application/json: { example: { success: false, error: "No autenticado." } } } }
         '403': { description: Rechazado por RLS, content: { application/json: { example: { success: false, error: "new row violates row-level security policy" } } } }
     patch:
       tags: [BFF · Mapas]
-      summary: Actualizar la ocupación de un estacionamiento
+      summary: Actualizar un estacionamiento (ocupación, estado activo o edición completa)
+      description: |
+        Requiere JWT + RLS (`auth.uid() = user_id`). El comportamiento depende del
+        campo `action`:
+          - **(sin `action`)**: requiere `id` y `occupied_spots` (≥ 0); actualiza
+            solo la ocupación.
+          - **`action: "toggleActivo"`**: requiere `id`; invierte el flag `activo`
+            (publicar/despublicar el estacionamiento). La respuesta incluye además
+            `activo`.
+          - **`action: "updateFull"`**: requiere `id`; actualiza cualquier
+            combinación de `nombre`, `totalSpots`, `esPmr`, `precioHora`,
+            `pricePerMinute`, `pricePerDay`, `allowedVehicleTypes`, `photos`,
+            `descripcion`, `direccion`.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ActualizarOcupacionRequest' }
-            example: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, occupied_spots: 4 }
+            schema: { $ref: '#/components/schemas/ActualizarEstacionamientoRequest' }
+            examples:
+              ocupacion:
+                summary: Actualizar ocupación
+                value: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, occupied_spots: 4 }
+              toggleActivo:
+                summary: Publicar / despublicar
+                value: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, action: toggleActivo }
+              updateFull:
+                summary: Edición completa
+                value: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, action: updateFull, nombre: "Estacionamiento Centro 2", precioHora: 1800, esPmr: true }
       responses:
-        '200': { description: Actualizado, content: { application/json: { example: { success: true, data: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, occupied_spots: 4 } } } } }
-        '400': { description: Falta id u occupied_spots, content: { application/json: { example: { success: false, error: "Se requiere id y occupied_spots." } } } }
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              example: { success: true, data: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, occupied_spots: 4 } }
+        '400':
+          description: Falta `id`, o falta/es inválido `occupied_spots` cuando no se envía `action`
+          content:
+            application/json:
+              example: { success: false, error: "Se requiere occupied_spots (>= 0)." }
         '401': { description: No autenticado }
         '403': { description: Rechazado por RLS }
+        '404': { description: "No existe un estacionamiento con ese id (modo toggleActivo)" }
     delete:
       tags: [BFF · Mapas]
-      summary: Eliminar uno o varios estacionamientos
+      summary: Eliminar (o desactivar) uno o varios estacionamientos
+      description: |
+        Requiere JWT + RLS. Por cada `id`: si tiene reservas activas
+        (`pendiente`/`confirmada`/`activa`), se aplica **soft-delete**
+        (`activo = false`); si no tiene, se elimina (**hard-delete**).
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -207,7 +267,16 @@ paths:
             schema: { type: object, properties: { ids: { type: array, items: { type: string, format: uuid } } }, required: [ids] }
             example: { ids: ["1a2b3c4d-0000-4f00-8a00-111122223333"] }
       responses:
-        '200': { description: Eliminados, content: { application/json: { example: { success: true, deleted: 1 } } } }
+        '200':
+          description: Procesados (eliminados y/o desactivados)
+          content:
+            application/json:
+              example:
+                success: true
+                hardDeleted: 1
+                softDeleted: 0
+                hardDeletedIds: ["1a2b3c4d-0000-4f00-8a00-111122223333"]
+                softDeletedIds: []
         '400': { description: Se requiere un array de IDs }
         '401': { description: No autenticado }
         '403': { description: Rechazado por RLS }
@@ -233,19 +302,34 @@ paths:
         '500': { description: Error de servidor }
     post:
       tags: [BFF · Reservas]
-      summary: Crear una reserva (transacción atómica)
+      summary: Crear una reserva (instantánea o "PRO" con fecha)
       description: |
-        Requiere JWT. Internamente invoca la función `reservar_estacionamiento`
-        (RPC `SECURITY DEFINER`), que bloquea la fila (`FOR UPDATE`), verifica el
-        cupo, inserta la reserva del `auth.uid()` e incrementa la ocupación en una
-        única transacción de PostgreSQL (anti doble-reserva).
+        Requiere JWT. Dos modos sobre la misma transacción atómica (RPC
+        `SECURITY DEFINER`, anti doble-reserva):
+
+          - **PRO (reserva anticipada)**: si se envían `fecha_inicio`/`fecha_fin`
+            (o `duration_hours`, con el que el backend calcula `fecha_fin`), se
+            invoca `crear_reserva_pro`, que valida solapamiento de horarios y crea
+            la reserva con estado `pendiente` (a confirmar por el arrendador).
+          - **Instantánea (legacy)**: sin fechas ni `duration_hours`, se invoca
+            `reservar_estacionamiento`, que bloquea la fila (`FOR UPDATE`),
+            verifica el cupo, inserta la reserva con estado `activa` e incrementa
+            `occupied_spots` — todo en una única transacción.
+
+        Si se envía `spot_label`, se asigna a la reserva creada en un segundo update.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/CrearReservaRequest' }
-            example: { parking_id: 1a2b3c4d-0000-4f00-8a00-111122223333, user_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff }
+            examples:
+              instantanea:
+                summary: Reserva instantánea (estacionar ya)
+                value: { parking_id: 1a2b3c4d-0000-4f00-8a00-111122223333, user_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff }
+              pro:
+                summary: Reserva PRO con horario
+                value: { parking_id: 1a2b3c4d-0000-4f00-8a00-111122223333, user_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff, fecha_inicio: "2026-06-15T10:00:00Z", fecha_fin: "2026-06-15T12:00:00Z", spot_label: "A-12" }
       responses:
         '201':
           description: Reserva creada
@@ -254,9 +338,17 @@ paths:
               example:
                 success: true
                 reserva: { id: 9z8y7x6w-0000-4c00-8d00-444455556666, estacionamiento_id: 1a2b3c4d-0000-4f00-8a00-111122223333, conductor_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff, estado: activa }
-        '400': { description: Faltan parking_id o user_id, content: { application/json: { example: { success: false, error: "Faltan parking_id o user_id." } } } }
+        '400':
+          description: Faltan `parking_id`/`user_id`, o error de negocio (p.ej. solapamiento de horario en modo PRO)
+          content:
+            application/json:
+              example: { success: false, error: "Faltan parking_id o user_id." }
         '401': { description: No autenticado }
-        '409': { description: Estacionamiento lleno, content: { application/json: { example: { success: false, error: "Estacionamiento lleno" } } } }
+        '409':
+          description: Estacionamiento lleno (la transacción se rechaza)
+          content:
+            application/json:
+              example: { success: false, error: "Estacionamiento lleno" }
         '500': { description: Error de servidor }
 
   # ─────────────────────────── MS MAPAS (puerto 3002) ──────────────────────────
@@ -373,12 +465,19 @@ components:
         total_spots: { type: integer }
         occupied_spots: { type: integer }
         es_pmr: { type: boolean }
+        activo: { type: boolean, description: "false = despublicado / soft-deleted" }
         precio_hora: { type: integer, description: CLP }
+        price_per_minute: { type: number, description: CLP (opcional) }
+        price_per_day: { type: integer, description: CLP (opcional) }
+        allowed_vehicle_types: { type: array, items: { type: string } }
+        comuna: { type: string }
+        descripcion: { type: string }
+        direccion: { type: string }
         created_at: { type: string, format: date-time }
 
     CrearEstacionamientoRequest:
       type: object
-      required: [nombre, lat, lng, userId]
+      required: [nombre, lat, lng]
       properties:
         nombre: { type: string }
         arrendador: { type: string }
@@ -386,14 +485,31 @@ components:
         lng: { type: number }
         totalSpots: { type: integer, default: 1 }
         esPmr: { type: boolean, default: false }
-        userId: { type: string, format: uuid }
+        precioHora: { type: integer, description: "CLP por hora (default 1500)" }
+        pricePerMinute: { type: number, description: CLP por minuto (opcional) }
+        pricePerDay: { type: integer, description: CLP por día (opcional) }
+        allowedVehicleTypes: { type: array, items: { type: string }, default: [car] }
+        comuna: { type: string }
+        descripcion: { type: string }
+        direccion: { type: string }
 
-    ActualizarOcupacionRequest:
+    ActualizarEstacionamientoRequest:
       type: object
-      required: [id, occupied_spots]
+      required: [id]
       properties:
         id: { type: string, format: uuid }
-        occupied_spots: { type: integer }
+        action: { type: string, enum: [toggleActivo, updateFull], description: "Si se omite, se interpreta como actualización de occupied_spots" }
+        occupied_spots: { type: integer, description: "Requerido (>= 0) si no se envía `action`" }
+        nombre: { type: string }
+        totalSpots: { type: integer }
+        esPmr: { type: boolean }
+        precioHora: { type: integer }
+        pricePerMinute: { type: number }
+        pricePerDay: { type: integer }
+        allowedVehicleTypes: { type: array, items: { type: string } }
+        photos: { type: array, items: { type: string } }
+        descripcion: { type: string }
+        direccion: { type: string }
 
     CrearReservaRequest:
       type: object
@@ -401,7 +517,10 @@ components:
       properties:
         parking_id: { type: string, format: uuid }
         user_id: { type: string, format: uuid }
-        start_time: { type: string, format: date-time }
+        fecha_inicio: { type: string, format: date-time, description: "Inicio de la reserva PRO. Si se omite junto con fecha_fin/duration_hours, la reserva es instantánea" }
+        fecha_fin: { type: string, format: date-time, description: "Fin de la reserva PRO" }
+        duration_hours: { type: number, description: "Alternativa a fecha_fin: duración en horas desde ahora (modo PRO)" }
+        spot_label: { type: string, description: "Etiqueta de la plaza asignada (p.ej. 'A-12')" }
 
     Reserva:
       type: object
@@ -409,7 +528,10 @@ components:
         id: { type: string, format: uuid }
         estacionamiento_id: { type: string, format: uuid }
         conductor_id: { type: string, format: uuid }
-        estado: { type: string, enum: [activa, completada, cancelada] }
+        estado: { type: string, enum: [pendiente, confirmada, activa, completada, cancelada] }
+        fecha_inicio: { type: string, format: date-time }
+        fecha_fin: { type: string, format: date-time }
+        spot_label: { type: string }
         created_at: { type: string, format: date-time }
 
     ErrorResponse:
