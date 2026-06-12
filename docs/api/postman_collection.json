@@ -1,0 +1,105 @@
+{
+  "info": {
+    "name": "Parkings Together — API REST",
+    "description": "Colección Postman de los endpoints de Parkings Together (BFF + microservicios). Define las variables {{bff}}, {{auth}}, {{mapas}}, {{reservas}} y {{token}} en el entorno.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "bff", "value": "http://localhost:3000" },
+    { "key": "auth", "value": "http://localhost:3001" },
+    { "key": "mapas", "value": "http://localhost:3002" },
+    { "key": "reservas", "value": "http://localhost:3003" },
+    { "key": "token", "value": "PEGAR_ACCESS_TOKEN_AQUI" }
+  ],
+  "item": [
+    {
+      "name": "Autenticación",
+      "item": [
+        {
+          "name": "Registro",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{auth}}/api/v1/auth/register", "host": ["{{auth}}"], "path": ["api","v1","auth","register"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"anfitrion@example.com\",\n  \"password\": \"secret123\",\n  \"nombre\": \"María Pérez\",\n  \"rol\": \"anfitrion\"\n}" }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{auth}}/api/v1/auth/login", "host": ["{{auth}}"], "path": ["api","v1","auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"anfitrion@example.com\",\n  \"password\": \"secret123\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "BFF · Mapas",
+      "item": [
+        {
+          "name": "Listar / buscar estacionamientos",
+          "request": { "method": "GET", "url": { "raw": "{{bff}}/api/mapas/search?lat=-33.4489&lng=-70.6693&radius=5", "host": ["{{bff}}"], "path": ["api","mapas","search"], "query": [{ "key": "lat", "value": "-33.4489" }, { "key": "lng", "value": "-70.6693" }, { "key": "radius", "value": "5" }] } }
+        },
+        {
+          "name": "Crear estacionamiento",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{bff}}/api/mapas/search", "host": ["{{bff}}"], "path": ["api","mapas","search"] },
+            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Estacionamiento Centro\",\n  \"arrendador\": \"María Pérez\",\n  \"lat\": -33.4489,\n  \"lng\": -70.6693,\n  \"totalSpots\": 10,\n  \"esPmr\": false,\n  \"userId\": \"8f1c2e3a-0000-4a11-9b22-aabbccddeeff\"\n}" }
+          }
+        },
+        {
+          "name": "Actualizar ocupación",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{bff}}/api/mapas/search", "host": ["{{bff}}"], "path": ["api","mapas","search"] },
+            "body": { "mode": "raw", "raw": "{\n  \"id\": \"1a2b3c4d-0000-4f00-8a00-111122223333\",\n  \"occupied_spots\": 4\n}" }
+          }
+        },
+        {
+          "name": "Eliminar estacionamientos",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{bff}}/api/mapas/search", "host": ["{{bff}}"], "path": ["api","mapas","search"] },
+            "body": { "mode": "raw", "raw": "{\n  \"ids\": [\"1a2b3c4d-0000-4f00-8a00-111122223333\"]\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "BFF · Reservas",
+      "item": [
+        {
+          "name": "Verificar disponibilidad",
+          "request": { "method": "GET", "url": { "raw": "{{bff}}/api/reservas/reserve?parkingId=1a2b3c4d-0000-4f00-8a00-111122223333", "host": ["{{bff}}"], "path": ["api","reservas","reserve"], "query": [{ "key": "parkingId", "value": "1a2b3c4d-0000-4f00-8a00-111122223333" }] } }
+        },
+        {
+          "name": "Crear reserva (atómica)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{bff}}/api/reservas/reserve", "host": ["{{bff}}"], "path": ["api","reservas","reserve"] },
+            "body": { "mode": "raw", "raw": "{\n  \"parking_id\": \"1a2b3c4d-0000-4f00-8a00-111122223333\",\n  \"user_id\": \"8f1c2e3a-0000-4a11-9b22-aabbccddeeff\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "MS Mapas (3002)",
+      "item": [
+        { "name": "GET search", "request": { "method": "GET", "url": { "raw": "{{mapas}}/api/v1/search", "host": ["{{mapas}}"], "path": ["api","v1","search"] } } }
+      ]
+    },
+    {
+      "name": "MS Reservas (3003)",
+      "item": [
+        { "name": "GET reserve (disponibilidad)", "request": { "method": "GET", "url": { "raw": "{{reservas}}/api/v1/reserve?parkingId=1a2b3c4d-0000-4f00-8a00-111122223333", "host": ["{{reservas}}"], "path": ["api","v1","reserve"], "query": [{ "key": "parkingId", "value": "1a2b3c4d-0000-4f00-8a00-111122223333" }] } } }
+      ]
+    }
+  ]
+}

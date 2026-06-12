@@ -54,3 +54,13 @@ DESPLIEGUE
 URL producción: https://parkings-web.vercel.app
 Plataforma: Vercel (CI/CD automático desde master)
 Base de datos: Supabase (PostgreSQL 17 con PostGIS)
+
+DOCUMENTACIÓN Y ENTREGABLES
+---------------------------
+API REST (Swagger / OpenAPI + Postman)
+   Carpeta: docs/api
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/docs/api
+
+Entrega Parcial 3 (diagrama de arquitectura, persistencia e informe de pruebas)
+   Carpeta: ENTREGA_PARCIAL3
+   URL: https://github.com/jeffplop/Parkings-Together/tree/master/ENTREGA_PARCIAL3
