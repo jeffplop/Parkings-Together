@@ -1,0 +1,419 @@
+openapi: 3.0.3
+info:
+  title: Parkings Together — API REST
+  version: "1.0.0"
+  description: |
+    Especificación de los endpoints de **Parkings Together**, un marketplace P2P de
+    estacionamientos. La arquitectura sigue el patrón **BFF (Backend for Frontend)**:
+    el frontend (`apps/web`) consume rutas de **mismo origen** (`/api/mapas`,
+    `/api/reservas`) que orquestan la lógica y la persistencia en Supabase/PostgreSQL.
+
+    Además se documentan los microservicios independientes (`auth`, `ms-mapas`,
+    `ms-reservas`), cada uno desplegable por separado, que exponen el mismo dominio
+    bajo el prefijo versionado `/api/v1`.
+
+    **Autenticación:** las operaciones de escritura requieren un *Bearer token* JWT
+    emitido por Supabase Auth (obtenido en `POST /api/v1/auth/login`). Las políticas
+    RLS de PostgreSQL evalúan `auth.uid()` con ese token.
+  contact:
+    name: Equipo Parkings Together
+  license:
+    name: Uso académico
+
+servers:
+  - url: http://localhost:3000
+    description: BFF / Frontend (apps/web)
+
+tags:
+  - name: Autenticación
+    description: Registro e inicio de sesión (microservicio auth, puerto 3001)
+  - name: BFF · Mapas
+    description: Estacionamientos vía rutas de mismo origen del frontend (puerto 3000)
+  - name: BFF · Reservas
+    description: Reservas vía rutas de mismo origen del frontend (puerto 3000)
+  - name: MS Mapas
+    description: Microservicio de estacionamientos independiente (puerto 3002)
+  - name: MS Reservas
+    description: Microservicio de reservas independiente (puerto 3003)
+
+paths:
+  # ───────────────────────────── AUTH (puerto 3001) ─────────────────────────────
+  /api/v1/auth/register:
+    servers:
+      - url: http://localhost:3001
+        description: Microservicio auth
+    post:
+      tags: [Autenticación]
+      summary: Registrar un nuevo usuario
+      description: Crea una cuenta en Supabase Auth. Un trigger crea el perfil asociado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: anfitrion@example.com
+              password: "secret123"
+              nombre: María Pérez
+              rol: anfitrion
+      responses:
+        '201':
+          description: Cuenta creada
+          content:
+            application/json:
+              example:
+                success: true
+                message: Cuenta creada. Revisa tu correo para confirmar.
+                user:
+                  id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff
+                  email: anfitrion@example.com
+                  rol: anfitrion
+        '400':
+          description: Faltan campos obligatorios o error de registro
+          content:
+            application/json:
+              example: { success: false, error: "Nombre, email, contraseña y rol son obligatorios." }
+
+  /api/v1/auth/login:
+    servers:
+      - url: http://localhost:3001
+        description: Microservicio auth
+    post:
+      tags: [Autenticación]
+      summary: Iniciar sesión
+      description: Valida credenciales y devuelve el `access_token` (JWT) para las llamadas autenticadas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: anfitrion@example.com
+              password: "secret123"
+      responses:
+        '200':
+          description: Sesión iniciada
+          content:
+            application/json:
+              example:
+                success: true
+                user:
+                  id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff
+                  email: anfitrion@example.com
+                  nombre: María Pérez
+                access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '400':
+          description: Email y contraseña obligatorios
+          content:
+            application/json:
+              example: { success: false, error: "Email y contraseña son obligatorios." }
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              example: { success: false, error: "Credenciales inválidas." }
+
+  # ───────────────────────── BFF · MAPAS (puerto 3000) ─────────────────────────
+  /api/mapas/search:
+    get:
+      tags: [BFF · Mapas]
+      summary: Listar / buscar estacionamientos
+      description: |
+        Lectura pública (RLS `SELECT USING (true)`). Permite filtrar por dueño
+        (`userId`) y por cercanía geográfica (`lat`, `lng`, `radius` en km, cálculo
+        Haversine en memoria).
+      parameters:
+        - { name: userId, in: query, required: false, schema: { type: string, format: uuid }, description: Filtra por dueño del estacionamiento }
+        - { name: lat, in: query, required: false, schema: { type: number }, example: -33.4489 }
+        - { name: lng, in: query, required: false, schema: { type: number }, example: -70.6693 }
+        - { name: radius, in: query, required: false, schema: { type: number }, description: Radio en km (1..9998), example: 5 }
+      responses:
+        '200':
+          description: Lista de estacionamientos
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - id: 1a2b3c4d-0000-4f00-8a00-111122223333
+                    nombre: Estacionamiento Centro
+                    arrendador: María Pérez
+                    lat: -33.4489
+                    lng: -70.6693
+                    total_spots: 10
+                    occupied_spots: 3
+                    es_pmr: false
+                    precio_hora: 1500
+                    user_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff
+        '500':
+          description: Error de servidor
+          content:
+            application/json:
+              example: { success: false, error: "mensaje del backend", data: [] }
+    post:
+      tags: [BFF · Mapas]
+      summary: Crear un estacionamiento
+      description: Requiere JWT. RLS exige rol `anfitrion` y `auth.uid() = user_id`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearEstacionamientoRequest' }
+            example:
+              nombre: Estacionamiento Centro
+              arrendador: María Pérez
+              lat: -33.4489
+              lng: -70.6693
+              totalSpots: 10
+              esPmr: false
+              userId: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              example:
+                success: true
+                data: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, nombre: Estacionamiento Centro, occupied_spots: 0, total_spots: 10, precio_hora: 1500 }
+        '400': { description: Faltan campos obligatorios, content: { application/json: { example: { success: false, error: "Faltan campos obligatorios: nombre, lat, lng, userId." } } } }
+        '401': { description: No autenticado, content: { application/json: { example: { success: false, error: "No autenticado." } } } }
+        '403': { description: Rechazado por RLS, content: { application/json: { example: { success: false, error: "new row violates row-level security policy" } } } }
+    patch:
+      tags: [BFF · Mapas]
+      summary: Actualizar la ocupación de un estacionamiento
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActualizarOcupacionRequest' }
+            example: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, occupied_spots: 4 }
+      responses:
+        '200': { description: Actualizado, content: { application/json: { example: { success: true, data: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, occupied_spots: 4 } } } } }
+        '400': { description: Falta id u occupied_spots, content: { application/json: { example: { success: false, error: "Se requiere id y occupied_spots." } } } }
+        '401': { description: No autenticado }
+        '403': { description: Rechazado por RLS }
+    delete:
+      tags: [BFF · Mapas]
+      summary: Eliminar uno o varios estacionamientos
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { ids: { type: array, items: { type: string, format: uuid } } }, required: [ids] }
+            example: { ids: ["1a2b3c4d-0000-4f00-8a00-111122223333"] }
+      responses:
+        '200': { description: Eliminados, content: { application/json: { example: { success: true, deleted: 1 } } } }
+        '400': { description: Se requiere un array de IDs }
+        '401': { description: No autenticado }
+        '403': { description: Rechazado por RLS }
+
+  # ──────────────────────── BFF · RESERVAS (puerto 3000) ───────────────────────
+  /api/reservas/reserve:
+    get:
+      tags: [BFF · Reservas]
+      summary: Verificar disponibilidad de un estacionamiento
+      parameters:
+        - { name: parkingId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Disponibilidad
+          content:
+            application/json:
+              example:
+                success: true
+                available: true
+                spots_left: 7
+                data: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, nombre: Estacionamiento Centro, occupied_spots: 3, total_spots: 10 }
+        '400': { description: Falta parkingId, content: { application/json: { example: { success: false, error: "Falta parkingId" } } } }
+        '500': { description: Error de servidor }
+    post:
+      tags: [BFF · Reservas]
+      summary: Crear una reserva (transacción atómica)
+      description: |
+        Requiere JWT. Internamente invoca la función `reservar_estacionamiento`
+        (RPC `SECURITY DEFINER`), que bloquea la fila (`FOR UPDATE`), verifica el
+        cupo, inserta la reserva del `auth.uid()` e incrementa la ocupación en una
+        única transacción de PostgreSQL (anti doble-reserva).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearReservaRequest' }
+            example: { parking_id: 1a2b3c4d-0000-4f00-8a00-111122223333, user_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff }
+      responses:
+        '201':
+          description: Reserva creada
+          content:
+            application/json:
+              example:
+                success: true
+                reserva: { id: 9z8y7x6w-0000-4c00-8d00-444455556666, estacionamiento_id: 1a2b3c4d-0000-4f00-8a00-111122223333, conductor_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff, estado: activa }
+        '400': { description: Faltan parking_id o user_id, content: { application/json: { example: { success: false, error: "Faltan parking_id o user_id." } } } }
+        '401': { description: No autenticado }
+        '409': { description: Estacionamiento lleno, content: { application/json: { example: { success: false, error: "Estacionamiento lleno" } } } }
+        '500': { description: Error de servidor }
+
+  # ─────────────────────────── MS MAPAS (puerto 3002) ──────────────────────────
+  /api/v1/search:
+    servers:
+      - url: http://localhost:3002
+        description: Microservicio ms-mapas
+    get:
+      tags: [MS Mapas]
+      summary: Listar estacionamientos (microservicio)
+      parameters:
+        - { name: userId, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: OK, content: { application/json: { example: { success: true, data: [] } } } }
+        '500': { description: Error }
+    post:
+      tags: [MS Mapas]
+      summary: Crear estacionamiento (microservicio)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { nombre: Centro, arrendador: María, lat: -33.44, lng: -70.66, totalSpots: 10, userId: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff }
+      responses:
+        '201': { description: Creado, content: { application/json: { example: { success: true, data: { id: "uuid", occupied_spots: 0 } } } } }
+        '400': { description: Faltan campos obligatorios }
+    patch:
+      tags: [MS Mapas]
+      summary: Actualizar ocupación (microservicio)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { id: 1a2b3c4d-0000-4f00-8a00-111122223333, occupied_spots: 4 }
+      responses:
+        '200': { description: Actualizado }
+        '400': { description: Se requiere id y occupied_spots }
+    delete:
+      tags: [MS Mapas]
+      summary: Eliminar estacionamientos (microservicio)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { ids: ["1a2b3c4d-0000-4f00-8a00-111122223333"] }
+      responses:
+        '200': { description: Eliminados, content: { application/json: { example: { success: true, deleted: 1 } } } }
+        '400': { description: Se requiere un array de IDs }
+
+  # ────────────────────────── MS RESERVAS (puerto 3003) ────────────────────────
+  /api/v1/reserve:
+    servers:
+      - url: http://localhost:3003
+        description: Microservicio ms-reservas
+    get:
+      tags: [MS Reservas]
+      summary: Verificar disponibilidad (microservicio)
+      parameters:
+        - { name: parkingId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: OK, content: { application/json: { example: { available: true, spots_left: 7, data: {} } } } }
+        '400': { description: Falta parkingId }
+        '500': { description: Error }
+    post:
+      tags: [MS Reservas]
+      summary: Crear reserva — patrón Saga (microservicio)
+      description: |
+        Implementa el patrón **Saga** en la capa de servicio: crea la reserva,
+        incrementa la ocupación y, si esto último falla, **compensa** borrando la
+        reserva creada (rollback) para mantener la integridad.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { parking_id: 1a2b3c4d-0000-4f00-8a00-111122223333, user_id: 8f1c2e3a-0000-4a11-9b22-aabbccddeeff }
+      responses:
+        '201': { description: Reserva creada, content: { application/json: { example: { success: true, reserva: { id: "uuid", estado: activa } } } } }
+        '500': { description: "Saga rechazada (lleno) o compensada (rollback)", content: { application/json: { example: { error: "El estacionamiento ya está lleno. Transacción rechazada." } } } }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT de Supabase Auth obtenido en POST /api/v1/auth/login
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, nombre, rol]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+        nombre: { type: string }
+        rol: { type: string, enum: [cliente, anfitrion] }
+
+    Estacionamiento:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        nombre: { type: string }
+        arrendador: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        total_spots: { type: integer }
+        occupied_spots: { type: integer }
+        es_pmr: { type: boolean }
+        precio_hora: { type: integer, description: CLP }
+        created_at: { type: string, format: date-time }
+
+    CrearEstacionamientoRequest:
+      type: object
+      required: [nombre, lat, lng, userId]
+      properties:
+        nombre: { type: string }
+        arrendador: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        totalSpots: { type: integer, default: 1 }
+        esPmr: { type: boolean, default: false }
+        userId: { type: string, format: uuid }
+
+    ActualizarOcupacionRequest:
+      type: object
+      required: [id, occupied_spots]
+      properties:
+        id: { type: string, format: uuid }
+        occupied_spots: { type: integer }
+
+    CrearReservaRequest:
+      type: object
+      required: [parking_id, user_id]
+      properties:
+        parking_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        start_time: { type: string, format: date-time }
+
+    Reserva:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        estacionamiento_id: { type: string, format: uuid }
+        conductor_id: { type: string, format: uuid }
+        estado: { type: string, enum: [activa, completada, cancelada] }
+        created_at: { type: string, format: date-time }
+
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }
