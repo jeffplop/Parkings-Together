@@ -5,7 +5,24 @@ import { rateLimit, clientIp } from '../../../../src/lib/rateLimit';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PW_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()\-_=+[\]{};':",.<>/?`~\\|]).{8,}$/;
 
+// Verifica variables de entorno críticas al arrancar el módulo para detectar
+// errores de configuración en los logs de Vercel desde el primer request.
+const MISSING_VARS = [
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+].filter((k) => !process.env[k]);
+
+if (MISSING_VARS.length > 0) {
+  console.error('[signup] CONFIGURACIÓN INCOMPLETA — variables faltantes:', MISSING_VARS.join(', '));
+}
+
 export async function POST(request) {
+  if (MISSING_VARS.length > 0) {
+    console.error('[signup] Abortando — faltan variables de entorno:', MISSING_VARS.join(', '));
+    return NextResponse.json({ error: 'Servicio de registro no disponible. Contacta al administrador.' }, { status: 503 });
+  }
+
   try {
     // Máximo 10 registros por IP por hora (mitiga creación masiva de cuentas).
     const { ok } = rateLimit(`signup:${clientIp(request)}`, { max: 10, windowMs: 60 * 60 * 1000 });
