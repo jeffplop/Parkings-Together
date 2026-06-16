@@ -23,6 +23,6 @@ en formato editable (`.docx`) y en `.pdf` listo para entregar.
 ## Notas
 
 - El informe de pruebas refleja **únicamente** las pruebas que existen y pasan en
-  el repositorio (10 pruebas, 3 suites, 100 % aprobadas). Es verificable clonando
-  el repo y ejecutando los comandos de su sección 8.
+  el repositorio (77 pruebas, 7 suites, 100 % aprobadas: 71 con Jest + 6 con `node:test`).
+  Es verificable clonando el repo y ejecutando los comandos de su sección 8.
 - El diagrama de arquitectura se generó como PNG y se incrustó en el PDF.

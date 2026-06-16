@@ -1,8 +1,8 @@
 # Pruebas Unitarias — Parkings Together
 ### Guía práctica: cómo ejecutarlas, generar la cobertura y qué mostrarle al profesor
 
-> **Estado real (verificado):** **66 pruebas, 66/66 passing** ·
-> Cobertura: **71.22 % sentencias · 70.76 % líneas · 69.23 % ramas** (supera el 60 % exigido).
+> **Estado real (verificado):** **77 pruebas, 77/77 passing** (71 con Jest + 6 con `node:test`) ·
+> Cobertura: **73.15 % sentencias · 72.85 % líneas · 70.43 % ramas** (supera el 60 % exigido).
 > Esta guía es para la **Evaluación Parcial N°3 (DSY1106)**. El paquete completo de
 > entrega está en la carpeta [`ENTREGA_PARCIAL3/`](../ENTREGA_PARCIAL3).
 
@@ -18,7 +18,7 @@ npm install
 
 # 1. Correr TODAS las pruebas unitarias (Jest)
 npx jest
-#    -> Esperado: "Tests: 66 passed, 66 total"
+#    -> Esperado: "Tests: 71 passed, 71 total"
 
 # 2. Correr las pruebas + generar el REPORTE DE COBERTURA
 npx jest --coverage
@@ -42,16 +42,17 @@ cd apps/web && npm test
 
 ---
 
-## 2. Qué se está probando (66 pruebas, 5 suites)
+## 2. Qué se está probando (77 pruebas: 71 Jest en 6 suites + 6 node:test)
 
 | Suite | Componente | N° | Qué valida |
 |---|---|---:|---|
 | `apps/web/tests/pricing.test.js` | BFF · `pricing.js` | **24** | Cálculo de tarifas por hora/minuto/día, redondeos, desglose |
 | `apps/web/tests/payments.test.js` | BFF · `payments.js` | **30** | Proveedores de pago, IDs de transacción únicos, contrato uniforme |
 | `apps/web/tests/geocoding.test.js` | BFF · `comunas-chile.js` | **8** | 16 regiones de Chile, detección por coordenadas |
+| `apps/web/tests/rateLimit.test.js` | BFF · `rateLimit.js` | **5** | Limitación de peticiones: ventana, reset y bloqueo |
 | `apps/ms-reservas/tests/reserveService.test.js` | **ms-reservas** | **2** | **Saga** (rollback compensatorio) y **CQRS** (rechazo si está lleno) |
 | `apps/web/tests/api.timeout.test.js` | BFF · resiliencia | **2** | `fetchWithTimeout` aborta y degrada ante latencia |
-| **TOTAL (Jest)** | | **66** | **66/66 passing** |
+| **TOTAL (Jest)** | | **71** | **71/71 passing** |
 
 Suite complementaria (corre con `npm test`, no con Jest):
 `apps/web/tests/api.test.js` → 6 pruebas de contrato de `/api/mapas/search` y `/api/reservas/reserve`.
@@ -64,10 +65,11 @@ Suite complementaria (corre con `npm test`, no con Jest):
 ----------------------------------------------|---------|----------|---------|---------
 File                                          | % Stmts | % Branch | % Funcs | % Lines
 ----------------------------------------------|---------|----------|---------|---------
-All files                                     |   71.22 |    69.23 |   38.46 |   70.76
+All files                                     |   73.15 |    70.43 |   41.46 |   72.85
  apps/ms-reservas/.../reserve/services         |   78.57 |   100.00 |   50.00 |   78.57
  apps/web/src/lib/pricing.js                   |  100.00 |    97.50 |  100.00 |  100.00
  apps/web/src/lib/comunas-chile.js             |  100.00 |   100.00 |  100.00 |  100.00
+ apps/web/src/lib/rateLimit.js                 |  100.00 |    81.81 |  100.00 |  100.00
  apps/web/src/lib/payments.js                  |   92.30 |    80.00 |  100.00 |   92.30
  packages/supabase-db/index.js                 |   53.33 |    41.66 |    0.00 |   53.33
 ----------------------------------------------|---------|----------|---------|---------
@@ -88,14 +90,14 @@ Sigue estos pasos **en vivo** durante la defensa. Toma ~3 minutos.
 ```bash
 npx jest
 ```
-> *“Tenemos 66 pruebas unitarias automatizadas y todas pasan.”*
-Muestra la línea verde **`Tests: 66 passed, 66 total`**.
+> *“Tenemos 77 pruebas unitarias automatizadas (71 con Jest + 6 con node:test) y todas pasan.”*
+Muestra la línea verde **`Tests: 71 passed, 71 total`**.
 
 **Paso 2 — Demostrar la cobertura (el requisito ≥ 60 %).**
 ```bash
 npx jest --coverage
 ```
-> *“La cobertura de sentencias es 71.22 %, supera el 60 % exigido.”*
+> *“La cobertura de sentencias es 73.15 %, supera el 60 % exigido.”*
 Señala la fila **`All files`** de la tabla.
 
 **Paso 3 — Mostrar el reporte navegable.**
@@ -113,8 +115,8 @@ Abre `apps/ms-reservas/tests/reserveService.test.js` y explica la prueba
 > verifica `expect(deleteReserve).toHaveBeenCalledWith('res-999')`.”*
 
 **Paso 5 — Enlazar con la documentación de entrega.**
-Abre [`ENTREGA_PARCIAL3/03_Informe_Pruebas_Unitarias.pdf`](../ENTREGA_PARCIAL3/03_Informe_Pruebas_Unitarias.md)
-y el diagrama [`ENTREGA_PARCIAL3/01_Diagrama_Arquitectura/arquitectura.png`](../ENTREGA_PARCIAL3/01_Diagrama_Arquitectura).
+Abre [`ENTREGA_PARCIAL3/03_Informe_Pruebas.pdf`](../ENTREGA_PARCIAL3/03_Informe_Pruebas.pdf)
+y el diagrama [`ENTREGA_PARCIAL3/img/arquitectura.png`](../ENTREGA_PARCIAL3/img/arquitectura.png).
 
 ### Checklist rápido antes de la defensa
 - [ ] `npx jest` corre sin errores en mi equipo (probado antes de la clase).
@@ -167,7 +169,7 @@ necesitan base de datos ni red reales.
 
 ## 7. Plan de mejora de cobertura (honesto)
 
-La métrica de **funciones (38 %)** es menor porque `apps/web/src/lib/api.js` (el
+La métrica de **funciones (41 %)** es menor porque `apps/web/src/lib/api.js` (el
 orquestador de red del BFF) y `packages/supabase-db/index.js` agrupan funciones de
 I/O difíciles de cubrir sin un entorno de integración. **Siguiente paso:** añadir
 pruebas de los *wrappers* de `api.js` con `fetch` mockeado (ya iniciado en

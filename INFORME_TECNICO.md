@@ -558,16 +558,17 @@ Y actualizar `src/lib/api.js` para apuntar a esas URLs en lugar de las rutas int
 
 ## 12. Suite de pruebas unitarias
 
-**Total**: ~66 pruebas en 5 suites. Comando: `npm test` desde la raíz.
+**Total**: **77 pruebas en 7 suites** (71 con Jest + 6 con `node:test`). Cobertura global **73.15 %** de sentencias. Comandos: `npx jest --coverage` (Jest, 71 pruebas) y `npm test` en `apps/web` (node:test, 6 pruebas de contrato), desde la raíz.
 
 | Archivo | Framework | Tests | Cubre |
 |---------|-----------|-------|-------|
-| `apps/web/tests/pricing.test.js` | Jest | ~20 | `calcTotal` y `calcBreakdown` — todas las combinaciones de tarifas, redondeos |
-| `apps/web/tests/api.test.js` | node:test | ~10 | BFF `api.mapas`, `api.reservas` — happy path + errores |
-| `apps/web/tests/api.timeout.test.js` | Jest | ~8 | `fetchWithTimeout` — timeout, abort, fallback |
-| `apps/web/tests/geocoding.test.js` | Jest | ~12 | `geocodeAddress`, `reverseGeocode`, `detectarRegion` |
-| `apps/web/tests/payments.test.js` | Jest | ~8 | Lógica de pagos simulados |
-| `apps/ms-reservas/tests/reserveService.test.js` | Jest | ~8 | Saga de reservas (mock de Supabase) |
+| `apps/web/tests/pricing.test.js` | Jest | 24 | `calcTotal` y `calcBreakdown` — combinaciones de tarifas, redondeos |
+| `apps/web/tests/payments.test.js` | Jest | 30 | Proveedores de pago (patrón Strategy), IDs únicos, contrato uniforme |
+| `apps/web/tests/geocoding.test.js` | Jest | 8 | `comunas-chile` — 16 regiones de Chile, detección por coordenadas |
+| `apps/web/tests/rateLimit.test.js` | Jest | 5 | `rateLimit` — ventana, reset y bloqueo de peticiones |
+| `apps/ms-reservas/tests/reserveService.test.js` | Jest | 2 | Saga de reservas: rollback compensatorio (mock de Supabase) |
+| `apps/web/tests/api.timeout.test.js` | Jest | 2 | `fetchWithTimeout` — timeout, abort, fallback |
+| `apps/web/tests/api.test.js` | node:test | 6 | Contratos BFF `/api/mapas/search` y `/api/reservas/reserve` — happy path + errores |
 
 ### Casos notables en pricing.test.js
 
