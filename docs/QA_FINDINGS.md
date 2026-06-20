@@ -1,71 +1,96 @@
 # Informe de QA y Auditoría — Parkings Together
 
-> Fecha: 2026-06-20 · Método: revisión del sitio en vivo (HTTP) +
-> auditoría del código fuente. Pendiente: recorrido interactivo completo
-> (requiere la extensión "Claude in Chrome" conectada o credenciales locales).
+> Fecha: 2026-06-20 · Método: **QA interactivo del sitio en vivo** (navegación real
+> con navegador) + auditoría del código fuente.
+> Cubierto: Home, Mapa/Búsqueda, Ranking, Premium, Chat IA.
+> Pendiente: flujos autenticados (login → publicar → reservar → pagar → calificar),
+> que requieren iniciar sesión —acción que el asistente no puede realizar por sí
+> mismo (crear cuentas / introducir contraseñas está fuera de su alcance).
 
 ## 1. Veredicto general
 
-La aplicación está **bien construida y es madura**: arquitectura BFF + microservicios,
-seguridad seria (RLS por usuario, rate-limiting, escape de HTML, validación de
-contraseña, anti-manipulación de montos), UI responsiva y cuidada, y degradación
-elegante ante fallos. Los problemas encontrados son **menores**; no hay fallas
-críticas evidentes en el código revisado.
+App **bien construida y madura**: arquitectura BFF + microservicios, seguridad
+seria (RLS, rate-limiting, escape de XSS, anti-manipulación de montos), UI muy
+cuidada. La navegación pública funciona y se ve excelente. Se detectaron **dos
+fallas reales** (una de UX, corregida; una de configuración en producción).
 
-## 2. Reglas de negocio (extraídas del código)
+## 2. Resultado del recorrido en vivo
 
-| Área | Regla |
-|---|---|
-| Registro | Contraseña: 8+ con mayúscula, minúscula, número y símbolo. Roles: `cliente` / `arrendador`. Rate-limit **10 registros/IP/hora**. Crea perfil (trigger) y, si el conductor da patente, su primer vehículo. |
-| Estacionamientos | Solo `arrendador` puede publicar (RLS). Lectura pública. Dueño edita/borra los suyos. `occupied_spots` entre 0 y `total_spots` (CHECK). Borrado: **lógico** si tiene reservas activas, físico si no. Precio base 1500 CLP. Búsqueda espacial PostGIS. |
-| Reservas | Dos modos: **instantánea** (ocupa cupo ya) y **profesional** (ventana `[inicio, fin)`, valida capacidad por solapamiento; estados pendiente→confirmada→completada/cancelada). Patrón **Saga** con compensación. **Bloqueo de plaza** 5 min anti-concurrencia. |
-| Calificación | Solo reservas **completadas**, nota 1–5; recalcula el `rating` del estacionamiento. |
-| Pagos | Proveedores `mock`/`efectivo`/`webpay`. Solo el conductor paga **su** reserva. El monto debe coincidir con `precio_total` (anti-manipulación). **Idempotente**. Tope 10.000.000 CLP. Pago **simulado** (Webpay queda para producción). |
-| Premium | Planes `free`/`pro`/`premium`, ciclo mensual/anual (anual = 2 meses gratis). El conductor **siempre** reserva gratis; el premium agrega conveniencia/ahorro. |
-| Chat soporte (IA) | Rate-limit **20/min/IP**. Detección de prompt-injection. Escalación a humano (fraude, reembolso, legal, emergencia). Claude Haiku, máx. 600 caracteres, contexto últimos 10 mensajes. |
-| Resumen de reseñas (IA) | Solo si hay ≥3 reseñas con texto. Cacheado por nº de reseñas; rate-limit solo en cache-miss. Siempre responde 200 (nunca rompe la ficha). |
+| Sección | Estado | Notas |
+|---|---|---|
+| Home (`/`) | ✅ | Renderiza perfecta, responsive, stats reales (22 plazas/15 comunas/4.3★), 0 errores de consola. |
+| Mapa (`/mapa`) | ✅ | Búsqueda geográfica `GET /api/mapas/search` → **200**. Mapa, radar, filtros y selector de vehículo OK. |
+| Ranking (`/ranking`) | ✅ | Detecta región (RM), stats 17/17/4.4, filtros y TOP-3 con podio OK. |
+| Premium (`/premium`) | ⚠️→✅ | **FOUC** corregido (ver 3.2). Tras hidratar, todas las secciones (planes, calculadora, niveles, comparativa, FAQ) se ven perfectas. |
+| Chat IA (Dareko) | ❌ | La UI funciona, pero la **IA falla en producción** (ver 3.1). |
 
 ## 3. Hallazgos
 
-### 3.1 Corregido en esta auditoría
-- **`<Toaster>` duplicado** (`apps/web/app/premium/page.js`, `apps/web/app/auth/page.js`):
-  el componente ya está montado globalmente en `layout.js`, por lo que en esas dos
-  páginas **cada notificación se renderizaba dos veces**. Se eliminaron los locales.
-  *Impacto: toasts dobles. Riesgo del fix: nulo (el global cubre toda la app).*
+### 3.1 ❌ CRÍTICO — El chat de IA falla en producción (config)
+Enviar cualquier mensaje al asistente "Dareko" devuelve siempre:
+*"Ocurrió un error. Por favor intenta de nuevo…"* (probado 2 veces, persistente).
+- El `POST /api/support/chat` responde **200** pero con el cuerpo del *catch*
+  del servidor → la llamada a Anthropic está **fallando**.
+- No es un 401 (la ruta tiene un caso aparte para eso), así que **no** es "falta
+  la API key" de forma directa. Causas probables: `ANTHROPIC_API_KEY` inválida o
+  sin crédito en Vercel, **o** el model id `claude-haiku-4-5` no resuelve (→404).
+- **Muy probablemente afecta también** al *Resumen IA de reseñas*
+  (`/api/resenas/resumen`), que usa el mismo cliente y modelo.
+- **Acción (ops, no código):** revisar en Vercel → Settings → Environment Variables
+  la `ANTHROPIC_API_KEY`, y los **runtime logs** (buscar `[support/chat]`) para ver
+  el error exacto. Si el log dice *model not found*, fijar el id a
+  `claude-haiku-4-5` válido o a la versión datada.
+- *Mitigación positiva:* el front degrada con elegancia (no crashea, muestra un
+  mensaje y el correo de soporte).
 
-### 3.2 Observaciones positivas (no requieren acción)
-- El chat de soporte **escapa el HTML** antes de re-inyectar `<strong>`/`<br>` →
-  `dangerouslySetInnerHTML` usado de forma **segura** (sin XSS).
-- Pagos **idempotentes** y con verificación de propiedad y de monto.
-- Reseñas y resumen IA **degradan a vacío con HTTP 200** para no romper la ficha.
+### 3.2 ✅ CORREGIDO — FOUC (flash sin estilos) en `/premium`
+Al cargar, la página de planes se mostraba **sin estilos durante 1–2 s** (texto
+plano, sin tarjetas) antes de hidratar. Causa: era la **única** página que ponía
+sus estilos en `<style jsx global>` (styled-jsx), que se **inyecta en el cliente
+tras hidratar**; el resto de páginas usa `<style jsx>` *scoped* y no sufre el
+problema.
+- **Fix:** se extrajo el CSS a `apps/web/app/premium/premium.css` y se importa
+  (`import './premium.css'`). El CSS importado se aplica **desde el primer paint**,
+  eliminando el parpadeo. Cambio semánticamente equivalente (mismos selectores).
+- ⚠️ *Requiere desplegar para confirmar en producción* (no fue posible verificar
+  el build de Turbopack localmente sin credenciales).
 
-### 3.3 Oportunidades de optimización (sin urgencia)
-- **Fuentes y Font Awesome por CDN** en `<head>` (`layout.js`): son recursos
-  *render-blocking*. Migrar a `next/font` y a un subconjunto local de iconos
-  mejoraría LCP/CLS.
-- **Stats del home** (`page.js`): se traen todos los estacionamientos activos al
-  cliente para contar plazas/comunas/rating. A escala conviene una RPC de agregado.
-- **Cobertura de `api.js`** (BFF) baja (~40% funcs): faltan pruebas de contrato
-  para las rutas nuevas (favoritos, pagos, premium, reseñas, soporte).
+### 3.3 ✅ CORREGIDO — `<Toaster>` duplicado
+`premium/page.js` y `auth/page.js` montaban un `<Toaster>` propio además del
+global de `layout.js` → cada notificación se renderizaba **dos veces**. Eliminados
+los locales.
 
-## 4. Innovación propuesta (hoja de ruta)
+### 3.4 Observación de UX — Prompt PWA intrusivo
+El banner "Instala Parkings Together" (abajo-izquierda) aparece en **todas** las
+páginas y **tapa contenido** (p. ej. la tarjeta #1 del podio en `/ranking`).
+Sugerencia: mostrarlo una sola vez / recordar el descarte / no solaparlo con
+contenido clave.
 
-- **Pago real con Webpay (Transbank).** La base ya existe: `src/lib/payments.js`
-  implementa el patrón **Strategy** y `/api/pagos` ya enruta por proveedor. Falta:
-  instalar el SDK de Transbank, implementar la estrategia `webpay` (init transaction
-  → redirección → commit en el `return_url`), y configurar credenciales (integración
-  → producción). No cambia el resto del flujo.
-- **IA (ampliar lo existente):** sugerencia de precio para arrendadores (según zona y
-  demanda), búsqueda en lenguaje natural ("plaza cerca del estadio a las 20:00"),
-  predicción de disponibilidad.
-- **Tiempo real:** ya hay Supabase Realtime habilitado en `estacionamientos`;
-  aprovecharlo para ocupación en vivo en el mapa y notificaciones push (PWA).
+### 3.5 Observaciones positivas (sin acción)
+- Chat: `dangerouslySetInnerHTML` con **escape de HTML previo** → sin XSS.
+- Pagos idempotentes con verificación de propiedad y monto.
+- Reseñas/resumen degradan a 200 para no romper la ficha.
+
+## 4. Reglas de negocio (extraídas del código)
+
+| Área | Regla |
+|---|---|
+| Registro | Contraseña 8+ con may/min/número/símbolo. Roles `cliente`/`arrendador`. Rate-limit 10/IP/hora. Crea perfil (trigger) y primer vehículo si hay patente. |
+| Estacionamientos | Solo `arrendador` publica. Lectura pública. `occupied` 0..`total` (CHECK). Borrado lógico si hay reservas activas. Búsqueda PostGIS. |
+| Reservas | Instantánea vs profesional (ventana, capacidad por solapamiento, pendiente→confirmada→completada/cancelada). Saga + compensación. Bloqueo de plaza 5 min. |
+| Calificación | Solo reservas completadas (1–5); recalcula el rating del estacionamiento. |
+| Pagos | Proveedores mock/efectivo/webpay. Solo el conductor paga su reserva; el monto debe coincidir; idempotente; tope 10M CLP. **Simulado** (Webpay para producción). |
+| Premium | Planes free/pro/premium, mensual/anual. El conductor siempre reserva gratis. |
+| Chat IA | Rate-limit 20/min/IP, anti prompt-injection, escalación a humano, Claude Haiku, 600 chars, últimos 10 mensajes. |
 
 ## 5. Estado y próximos pasos
 
-- ✅ Auditoría de código de las páginas núcleo + verificación del deploy en vivo.
-- ✅ Corrección del `<Toaster>` duplicado.
-- ⏳ **Recorrido interactivo completo** (login, publicar plaza, reservar, pagar,
-  calificar, premium): requiere la extensión *Claude in Chrome* conectada o un
-  `.env.local` con credenciales de un proyecto Supabase de prueba.
-- ⏳ Integración real de Webpay y pruebas de contrato del BFF.
+- ✅ QA interactivo de la superficie pública + auditoría de código.
+- ✅ Corregidos: FOUC de Premium y Toaster duplicado (PR de QA).
+- 🔴 **Pendiente urgente (ops):** arreglar la IA en producción (env/model en Vercel).
+- ⏳ **Flujos autenticados** (publicar/reservar/pagar/calificar): requieren una
+  sesión iniciada. El asistente no puede crear cuentas ni introducir contraseñas;
+  hacen falta o bien que el equipo recorra esos flujos, o una sesión de prueba ya
+  iniciada en el navegador.
+- ⏳ Innovación: integración real de **Webpay (Transbank)** — la base (Strategy en
+  `payments.js` + `/api/pagos`) ya está lista; falta SDK + credenciales.
