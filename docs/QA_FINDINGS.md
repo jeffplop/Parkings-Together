@@ -109,5 +109,34 @@ contenido clave.
   sesión iniciada. El asistente no puede crear cuentas ni introducir contraseñas;
   hacen falta o bien que el equipo recorra esos flujos, o una sesión de prueba ya
   iniciada en el navegador.
+- ✅ Migración de IA a **Gemini** hecha en código (chat + resumen). Toma efecto al
+  desplegar; usa la key ya configurada (`GEMINI_API_KEY`/`GOOGLE_API_KEY`/`ANTHROPIC_API_KEY`).
 - ⏳ Innovación: integración real de **Webpay (Transbank)** — la base (Strategy en
   `payments.js` + `/api/pagos`) ya está lista; falta SDK + credenciales.
+
+## 6. Flujo autenticado completo (sesión arrendador) — verificado en vivo
+
+Recorrido end-to-end con sesión real iniciada por el usuario:
+
+| Paso | Resultado |
+|---|---|
+| Login + Dashboard | ✅ |
+| **Publicar estacionamiento** | ✅ `POST /api/mapas/search` **201** (aparece DISPONIBLE 0/5 $1500/hr) |
+| Buscar plaza / mapa | ✅ "23 estacionamientos" (incluye la creada); búsqueda PostGIS OK |
+| Ficha de estacionamiento | ✅ (la propia muestra "Tu publicación" + Gestión, sin botón reservar) |
+| **Reservar** (otra plaza) | ✅ selector visual de plazas → duración → `POST /api/reservas/reserve` **201** |
+| **Pagar** (Webpay simulado) | ✅ `POST /api/pagos` **201** |
+
+### Hallazgos del flujo
+- 🟡 **Inestabilidad transitoria durante el redeploy:** varias lecturas devolvieron
+  **503** (ranking vacío, "estacionamiento no encontrado"), pero las funciones
+  logueaban 200 → era la **ventana de despliegue** de Vercel. Al recargar, todo OK.
+  *Recomendación: avisar/bloquear acciones durante deploys, o reintentar en cliente.*
+- 🟡 **Datos: `comuna` mal poblada** — al publicar "Av. Providencia 1234", la comuna
+  quedó como **"1234"** (el geocoder usó el número de calle). Debería extraer la
+  comuna real.
+- 🟡 **Datos: rating por defecto inflado** — un estacionamiento recién creado (0
+  reservas) devuelve `rating: 4.5, reviews_count: 10` en la API de lista (se ve en
+  tarjetas/mapa), mientras la **ficha** muestra correctamente 0 reseñas / sin
+  calificación. El `rating`/`reviews_count` almacenado no refleja la realidad →
+  conviene que las nuevas plazas partan en 0 y el rating se calcule de reseñas reales.
