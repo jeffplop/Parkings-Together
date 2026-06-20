@@ -24,8 +24,10 @@ info:
     name: Uso académico
 
 servers:
+  - url: https://parkings-web.vercel.app
+    description: Producción (BFF / Frontend)
   - url: http://localhost:3000
-    description: BFF / Frontend (apps/web)
+    description: Desarrollo local (BFF / Frontend)
 
 tags:
   - name: BFF · Auth
