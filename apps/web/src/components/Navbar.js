@@ -101,8 +101,9 @@ export default function Navbar() {
     if (!user) { setPendingCount(0); return; }
 
     let channel;
+    let cancelled = false;
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return;
+      if (cancelled || !session) return;
       const token = session.access_token;
 
       const loadCount = async () => {
@@ -124,7 +125,7 @@ export default function Navbar() {
         .subscribe();
     });
 
-    return () => { if (channel) supabase.removeChannel(channel); };
+    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
   }, [user]);
 
   // ── Click Outside Dropdown ──
