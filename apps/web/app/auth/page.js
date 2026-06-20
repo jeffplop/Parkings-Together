@@ -2,7 +2,7 @@
 import { Suspense } from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { toast, Toaster } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 import { supabase } from '@parkings/supabase-db';
 
 // ─── Password strength ────────────────────────────────────────────────────────
@@ -180,7 +180,6 @@ function AuthForm() {
 
   return (
     <div className="auth-fullscreen">
-      <Toaster position="top-right" toastOptions={{ style: { background: '#1e293b', color: '#fff', border: '1px solid #3b82f6' } }} />
 
       <div className="auth-glass-box">
         {/* ── Brand ── */}
