@@ -11,6 +11,23 @@ origen consumidas por el frontend) y los **microservicios** independientes.
 | [`index.html`](./index.html) | Visor **Swagger UI** (carga `openapi.yaml`). Es "el link de la API": página para ver y probar los endpoints. |
 | [`postman_collection.json`](./postman_collection.json) | Colección **Postman** lista para importar. |
 
+## Endpoints documentados (29 operaciones)
+
+| Área | Rutas |
+|---|---|
+| Autenticación | `POST /api/auth/signup` · `POST /api/v1/auth/login` · `POST /api/v1/auth/register` |
+| Mapas | `GET/POST/PATCH/DELETE /api/mapas/search` · `GET/POST/DELETE /api/mapas/locks` |
+| Reservas | `GET/POST /api/reservas/reserve` · `GET/PATCH /api/reservas/manage` |
+| Reseñas | `GET /api/resenas` · `GET /api/resenas/resumen` (resumen IA) |
+| Favoritos | `GET/POST/DELETE /api/favoritos` |
+| Pagos y planes | `POST /api/pagos` · `GET/POST /api/premium` |
+| Soporte | `POST /api/support/chat` (asistente IA) |
+| Microservicios | `/api/v1/search` (ms-mapas) · `/api/v1/reserve` (ms-reservas) |
+
+> La especificación incluye el servidor de **producción** (`https://parkings-web.vercel.app`)
+> y el de **desarrollo** (`http://localhost:3000`); puedes elegir cuál usar desde el
+> selector «Servers» de Swagger UI.
+
 ## Cómo ver el Swagger
 
 **Opción A — Abrir el visor localmente**
