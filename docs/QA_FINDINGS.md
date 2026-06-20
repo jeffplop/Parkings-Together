@@ -29,17 +29,17 @@ fallas reales** (una de UX, corregida; una de configuración en producción).
 ### 3.1 ❌ CRÍTICO — El chat de IA falla en producción (config)
 Enviar cualquier mensaje al asistente "Dareko" devuelve siempre:
 *"Ocurrió un error. Por favor intenta de nuevo…"* (probado 2 veces, persistente).
-- El `POST /api/support/chat` responde **200** pero con el cuerpo del *catch*
-  del servidor → la llamada a Anthropic está **fallando**.
-- No es un 401 (la ruta tiene un caso aparte para eso), así que **no** es "falta
-  la API key" de forma directa. Causas probables: `ANTHROPIC_API_KEY` inválida o
-  sin crédito en Vercel, **o** el model id `claude-haiku-4-5` no resuelve (→404).
-- **Muy probablemente afecta también** al *Resumen IA de reseñas*
-  (`/api/resenas/resumen`), que usa el mismo cliente y modelo.
-- **Acción (ops, no código):** revisar en Vercel → Settings → Environment Variables
-  la `ANTHROPIC_API_KEY`, y los **runtime logs** (buscar `[support/chat]`) para ver
-  el error exacto. Si el log dice *model not found*, fijar el id a
-  `claude-haiku-4-5` válido o a la versión datada.
+- **Causa raíz CONFIRMADA** (runtime logs de Vercel, prod): el error es
+  `[support/chat] Error: Could not resolve authentication method. Expected either
+  apiKey or authToken to be set.` → **la `ANTHROPIC_API_KEY` no está configurada en
+  el entorno de producción**. El SDK lanza ese error genérico (sin `.status`), por
+  eso cae en el *catch* general (responde 200 con el mensaje de error) y no en la
+  rama 401.
+- **Afecta también** al *Resumen IA de reseñas* (`/api/resenas/resumen`), que usa
+  el mismo cliente; ahí degrada en silencio (no muestra la tarjeta de resumen).
+- **Fix (ops, no código):** Vercel → proyecto `parkings-web` → Settings →
+  Environment Variables → añadir `ANTHROPIC_API_KEY` (scope **Production**) →
+  **redeploy**. No requiere cambios de código.
 - *Mitigación positiva:* el front degrada con elegancia (no crashea, muestra un
   mensaje y el correo de soporte).
 
