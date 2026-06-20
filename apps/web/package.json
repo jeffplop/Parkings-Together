@@ -21,6 +21,7 @@
     "react-dom": "latest",
     "react-hook-form": "^7.76.1",
     "react-hot-toast": "^2.6.0",
+    "swagger-ui-react": "^5.32.6",
     "zod": "^4.4.3"
   }
 }
