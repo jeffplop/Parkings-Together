@@ -13,7 +13,7 @@ const getKey = () =>
   process.env.ANTHROPIC_API_KEY ||
   null;
 
-const getModel = () => process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const getModel = () => process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
 export function hasGeminiKey() {
   return Boolean(getKey());
@@ -69,7 +69,9 @@ export async function geminiGenerate({
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    const e = new Error(`Gemini ${res.status}: ${detail.slice(0, 200)}`);
+    // Marcador limpio y greppable en logs para diagnosticar el status exacto.
+    console.error(`GEMINIERR_${res.status} ${detail.slice(0, 300)}`);
+    const e = new Error(`Gemini ${res.status}: ${detail.slice(0, 300)}`);
     e.status = res.status;
     throw e;
   }
