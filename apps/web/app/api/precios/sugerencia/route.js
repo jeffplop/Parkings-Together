@@ -119,7 +119,8 @@ export async function GET(request) {
         },
         { status: 200 },
       );
-    } catch {
+    } catch (e) {
+      console.error('PRECIOIA_ERR', e?.message);
       return NextResponse.json(fallback, { status: 200 });
     }
   } catch (err) {

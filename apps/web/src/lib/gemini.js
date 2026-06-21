@@ -116,7 +116,12 @@ export async function geminiGenerate({
   }
 
   const data = await res.json();
-  return (data?.candidates?.[0]?.content?.parts || [])
+  const text = (data?.candidates?.[0]?.content?.parts || [])
     .map((p) => p.text || '')
     .join('');
+  // En modo JSON, algunos modelos envuelven la salida en ```json ... ```; lo limpiamos
+  // para que JSON.parse del llamador funcione siempre.
+  return json
+    ? text.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+    : text;
 }
