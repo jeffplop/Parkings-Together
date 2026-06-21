@@ -5,7 +5,10 @@
 //
 // Clave: se lee en tiempo de ejecución de GEMINI_API_KEY (o GOOGLE_API_KEY, o
 // ANTHROPIC_API_KEY como compatibilidad con la variable ya configurada en Vercel).
-// Modelo: configurable con GEMINI_MODEL (por defecto gemini-2.0-flash).
+//
+// Modelo: los nombres de modelo disponibles dependen de la key/proyecto. En vez de
+// asumir uno fijo (que da 404 "model not found"), se DESCUBRE con ListModels y se
+// elige uno de tipo `flash` (rápido/barato). Se puede forzar con GEMINI_MODEL.
 
 const getKey = () =>
   process.env.GEMINI_API_KEY ||
@@ -13,10 +16,44 @@ const getKey = () =>
   process.env.ANTHROPIC_API_KEY ||
   null;
 
-const getModel = () => process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export function hasGeminiKey() {
   return Boolean(getKey());
+}
+
+// Cache del modelo resuelto para no llamar a ListModels en cada request.
+let cachedModel = null;
+
+async function resolveModel(key) {
+  if (process.env.GEMINI_MODEL) return process.env.GEMINI_MODEL;
+  if (cachedModel) return cachedModel;
+  try {
+    const r = await fetch(`${BASE}/models?key=${encodeURIComponent(key)}`);
+    if (r.ok) {
+      const j = await r.json();
+      const usable = (j.models || []).filter((m) =>
+        (m.supportedGenerationMethods || []).includes('generateContent')
+      );
+      // Prefiere un modelo "flash" estable (evita variantes vision/thinking/exp);
+      // si no hay, cualquier flash; si no, el primero disponible.
+      const pick =
+        usable.find((m) => /flash/i.test(m.name) && !/(vision|thinking|exp|preview)/i.test(m.name)) ||
+        usable.find((m) => /flash/i.test(m.name)) ||
+        usable[0];
+      if (pick) {
+        cachedModel = pick.name.replace(/^models\//, '');
+        console.log('[gemini] modelo seleccionado:', cachedModel);
+        return cachedModel;
+      }
+    } else {
+      console.error('GEMINIERR_LISTMODELS_' + r.status);
+    }
+  } catch (e) {
+    console.error('[gemini] resolveModel fallo:', e?.message);
+  }
+  // Último recurso si ListModels no responde.
+  return 'gemini-1.5-flash';
 }
 
 /**
@@ -43,6 +80,8 @@ export async function geminiGenerate({
     throw e;
   }
 
+  const model = await resolveModel(key);
+
   // Gemini usa 'model' en vez de 'assistant'.
   const contents = (messages || []).map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
@@ -59,18 +98,18 @@ export async function geminiGenerate({
   };
   if (system) body.systemInstruction = { parts: [{ text: system }] };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${getModel()}:generateContent?key=${encodeURIComponent(key)}`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(
+    `${BASE}/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  );
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    // Marcador limpio y greppable en logs para diagnosticar el status exacto.
-    console.error(`GEMINIERR_${res.status} ${detail.slice(0, 300)}`);
+    console.error(`GEMINIERR_${res.status} model=${model} ${detail.slice(0, 300)}`);
     const e = new Error(`Gemini ${res.status}: ${detail.slice(0, 300)}`);
     e.status = res.status;
     throw e;
