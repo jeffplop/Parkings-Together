@@ -74,12 +74,17 @@ export async function GET(request) {
     };
 
     if (!hasGeminiKey() || precios.length === 0) {
+      console.error('PRECIOIA_GATE nokey-or-nocomparables', { key: hasGeminiKey(), comparables: precios.length });
       return NextResponse.json(fallback, { status: 200 });
     }
 
     // Rate-limit por IP (la IA cuesta): 15/min.
     const { ok } = rateLimit(`precio:${clientIp(request)}`, { max: 15, windowMs: 60_000 });
-    if (!ok) return NextResponse.json(fallback, { status: 200 });
+    if (!ok) {
+      console.error('PRECIOIA_GATE ratelimited');
+      return NextResponse.json(fallback, { status: 200 });
+    }
+    console.error('PRECIOIA_GATE calling_gemini');
 
     let out = '';
     try {
