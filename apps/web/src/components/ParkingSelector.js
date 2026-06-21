@@ -226,6 +226,32 @@ export default function ParkingSelector({ parking, onClose, onReserve, isReservi
       return;
     }
 
+    // Pago con Webpay (Transbank): redirige al usuario a la pasarela de pago real.
+    if (payMethod === 'webpay' && authToken && totalPrice > 0) {
+      try {
+        const res = await fetch('/api/pagos/webpay/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ reserva_id: result?.reservaId || null, amount: totalPrice }),
+        });
+        const data = await res.json();
+        if (data.success && data.url && data.token) {
+          // Redirección estándar de Webpay: POST token_ws al formulario de Transbank.
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = data.url;
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = 'token_ws';
+          input.value = data.token;
+          form.appendChild(input);
+          document.body.appendChild(form);
+          form.submit();
+          return; // el navegador navega a Transbank; el commit ocurre en /api/pagos/webpay/return
+        }
+      } catch { /* si falla el init, cae al registro simulado de abajo */ }
+    }
+
     if (authToken && totalPrice > 0) {
       try {
         await fetch('/api/pagos', {
