@@ -34,6 +34,8 @@ export default function DashboardPage() {
 
   // Pricing
   const [precioHora,     setPrecioHora]     = useState('');
+  const [sugPrecio,      setSugPrecio]      = useState(null);
+  const [sugLoading,     setSugLoading]     = useState(false);
   const [pricePerMinute, setPricePerMinute] = useState('');
   const [pricePerDay,    setPricePerDay]    = useState('');
 
@@ -208,6 +210,28 @@ export default function DashboardPage() {
       }
     } catch {
       showToast('Error de conexión satelital.', 'error');
+    }
+  };
+
+  const handleSugerirPrecio = async () => {
+    if (!lat || !lng) { showToast('Primero fija la ubicación en el mapa.', 'error'); return; }
+    setSugLoading(true);
+    try {
+      const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
+      if (comuna) params.set('comuna', comuna);
+      const res = await fetch(`/api/precios/sugerencia?${params.toString()}`);
+      const data = await res.json();
+      if (data.success) {
+        setSugPrecio(data);
+        setPrecioHora(String(data.sugerido));
+        showToast(data.ia ? 'Precio sugerido por IA ✨' : 'Precio sugerido para la zona', 'success');
+      } else {
+        showToast(data.error || 'No se pudo sugerir un precio.', 'error');
+      }
+    } catch {
+      showToast('Error al sugerir el precio.', 'error');
+    } finally {
+      setSugLoading(false);
     }
   };
 
@@ -692,6 +716,22 @@ export default function DashboardPage() {
                   Completa solo las tarifas que quieras ofrecer. Puedes dejarlas en blanco y definirlas después.
                   El sistema elige automáticamente la opción más conveniente para quien reserva.
                 </p>
+                <button
+                  type="button"
+                  onClick={handleSugerirPrecio}
+                  disabled={sugLoading}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 14px', fontWeight: 700, fontSize: '0.82rem', cursor: sugLoading ? 'default' : 'pointer', marginBottom: 12, opacity: sugLoading ? 0.7 : 1 }}
+                >
+                  {sugLoading
+                    ? <><i className="fa-solid fa-spinner fa-spin"></i> Calculando…</>
+                    : <><i className="fa-solid fa-wand-magic-sparkles"></i> Sugerir precio con IA</>}
+                </button>
+                {sugPrecio && (
+                  <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: '#a78bfa', display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1.4 }}>
+                    <i className="fa-solid fa-lightbulb"></i>
+                    <span>{sugPrecio.razon}{sugPrecio.comparables > 0 ? ` · Rango zona: $${(sugPrecio.min || 0).toLocaleString('es-CL')}–$${(sugPrecio.max || 0).toLocaleString('es-CL')}/h` : ''}</span>
+                  </p>
+                )}
                 <div className="tarifa-grid">
                   <div className="tarifa-field">
                     <span className="tarifa-cap"><i className="fa-solid fa-clock"></i> Por hora</span>
