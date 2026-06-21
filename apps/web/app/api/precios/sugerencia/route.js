@@ -81,8 +81,9 @@ export async function GET(request) {
     const { ok } = rateLimit(`precio:${clientIp(request)}`, { max: 15, windowMs: 60_000 });
     if (!ok) return NextResponse.json(fallback, { status: 200 });
 
+    let out = '';
     try {
-      const out = await geminiGenerate({
+      out = await geminiGenerate({
         system:
           'Eres un asesor de precios para un marketplace chileno de estacionamientos (precios en CLP). ' +
           'Dado el precio por hora de estacionamientos cercanos comparables, sugiere un precio por hora ' +
@@ -103,7 +104,9 @@ export async function GET(request) {
         json: true,
       });
 
-      const parsed = JSON.parse(out || '{}');
+      // Extrae el primer objeto JSON aunque el modelo agregue texto alrededor.
+      const match = String(out).match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(match ? match[0] : (out || '{}'));
       const sugerido = Math.round(Number(parsed.sugerido));
       if (!Number.isFinite(sugerido) || sugerido <= 0) return NextResponse.json(fallback, { status: 200 });
 
@@ -120,7 +123,7 @@ export async function GET(request) {
         { status: 200 },
       );
     } catch (e) {
-      console.error('PRECIOIA_ERR', e?.message);
+      console.error('PRECIOIA_ERR', e?.message, '| RAW:', String(out).slice(0, 200));
       return NextResponse.json(fallback, { status: 200 });
     }
   } catch (err) {
