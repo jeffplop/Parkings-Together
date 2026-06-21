@@ -1,8 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 import { rateLimit, clientIp } from '../../../../src/lib/rateLimit';
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { geminiGenerate } from '../../../../src/lib/gemini';
 
 // ── Prompt injection patterns ──────────────────────────────────────────────
 const INJECTION_PATTERNS = [
@@ -168,14 +166,11 @@ export async function POST(request) {
       content: typeof m.content === 'string' ? m.content.slice(0, 600) : '',
     }));
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 400,
+    const reply = (await geminiGenerate({
       system: SYSTEM_PROMPT,
       messages: recentMessages,
-    });
-
-    const reply = response.content?.[0]?.text ?? 'No pude generar una respuesta. Por favor intenta de nuevo.';
+      maxOutputTokens: 400,
+    })) || 'No pude generar una respuesta. Por favor intenta de nuevo.';
 
     return NextResponse.json({ reply });
   } catch (err) {

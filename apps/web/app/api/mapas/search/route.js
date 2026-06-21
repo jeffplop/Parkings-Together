@@ -160,6 +160,10 @@ export async function POST(request) {
       coordenadas: `SRID=4326;POINT(${lngVal} ${latVal})`,
       total_spots: parseInt(body.totalSpots) || 1,
       occupied_spots: 0,
+      // Nuevas plazas parten SIN reseñas/rating (evita "social proof" falso).
+      // El rating real se calcula a partir de las calificaciones de reservas.
+      rating: 0,
+      reviews_count: 0,
       es_pmr: body.esPmr || false,
       user_id: user.id,
       precio_hora: body.precioHora ? Math.round(parseFloat(body.precioHora)) : 1500,

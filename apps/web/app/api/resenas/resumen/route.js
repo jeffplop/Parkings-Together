@@ -15,14 +15,12 @@
 //    Nunca rompe la ficha del estacionamiento.
 
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from '@parkings/supabase-db';
 import { rateLimit, clientIp } from '../../../../src/lib/rateLimit';
+import { geminiGenerate, hasGeminiKey } from '../../../../src/lib/gemini';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const cache = new Map();
 const MIN_RESENAS = 3;     // bajo este umbral no aporta y se omite
@@ -54,7 +52,7 @@ export async function GET(request) {
     const { ok } = rateLimit(`resumen:${clientIp(request)}`, { max: 15, windowMs: 60_000 });
     if (!ok) return NextResponse.json({ success: true, resumen: null, motivo: 'rate_limited' }, { status: 200 });
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!hasGeminiKey()) {
       return NextResponse.json({ success: true, resumen: null }, { status: 200 });
     }
 
@@ -64,19 +62,20 @@ export async function GET(request) {
       .map((r) => `(${r.calificacion}★) ${String(r.comentario).slice(0, 280)}`)
       .join('\n');
 
-    const resp = await anthropic.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 320,
+    const out = await geminiGenerate({
       system: `Eres un analista de reseñas de un marketplace chileno de estacionamientos. Resumes reseñas REALES de usuarios verificados de forma honesta, neutral y útil para quien decide si reservar. Responde SOLO con JSON válido (sin texto adicional, sin markdown) con esta forma EXACTA:
 {"resumen":"<2-3 frases en español neutral>","pros":["<máx 3, cortos>"],"contras":["<máx 3, cortos; usa [] si no hay>"]}
 No inventes nada que no esté en las reseñas. Si son contradictorias, dilo con neutralidad.`,
       messages: [
         { role: 'user', content: `Promedio: ${promedio.toFixed(1)}★ sobre ${reviews.length} reseñas verificadas.\nReseñas:\n${corpus}` },
       ],
+      maxOutputTokens: 320,
+      temperature: 0.4,
+      json: true,
     });
 
     let parsed = null;
-    try { parsed = JSON.parse(resp.content?.[0]?.text ?? '{}'); } catch { /* respuesta no-JSON */ }
+    try { parsed = JSON.parse(out || '{}'); } catch { /* respuesta no-JSON */ }
     if (!parsed?.resumen) return NextResponse.json({ success: true, resumen: null }, { status: 200 });
 
     const payload = {

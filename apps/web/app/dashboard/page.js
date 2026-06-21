@@ -193,14 +193,15 @@ export default function DashboardPage() {
   const handleSearchAddress = async () => {
     if (!direccion.trim()) return;
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion + ', Chile')}`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q=${encodeURIComponent(direccion + ', Chile')}`);
       const data = await res.json();
       if (data && data.length > 0) {
         setLat(data[0].lat);
         setLng(data[0].lon);
-        // Intenta extraer la comuna del nombre devuelto por el geocodificador.
-        const partes = (data[0].display_name || '').split(',').map(s => s.trim());
-        if (partes.length >= 2) setComuna(partes[1]);
+        // Extrae la comuna real desde los datos estructurados (no del número de calle).
+        const a = data[0].address || {};
+        const comunaReal = a.city || a.town || a.municipality || a.city_district || a.suburb || a.county || '';
+        if (comunaReal) setComuna(comunaReal);
         showToast('¡Dirección ubicada y fijada en el mapa!', 'success');
       } else {
         showToast('Dirección no encontrada.', 'error');
