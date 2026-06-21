@@ -98,14 +98,17 @@ export async function GET(request) {
               `Dame UN precio por hora competitivo y realista (solo el número entero).`,
           },
         ],
-        maxOutputTokens: 64,
+        maxOutputTokens: 128,
         temperature: 0.2,
       });
 
-      // Extrae el primer número de la respuesta (tolera "$2.000", "2000 CLP", etc.).
-      const m = String(out).match(/\d[\d.\s]*/);
-      const sugerido = m ? parseInt(m[0].replace(/[^\d]/g, ''), 10) : NaN;
-      if (!Number.isFinite(sugerido) || sugerido <= 0) {
+      // Extrae TODOS los números y elige el primero dentro de un rango sano. Esto
+      // protege contra truncado de la respuesta o sugerencias absurdas del modelo.
+      const nums = (String(out).match(/\d[\d.]*/g) || []).map((s) => parseInt(s.replace(/[^\d]/g, ''), 10));
+      const loMin = Math.round(fallback.min * 0.6);
+      const hiMax = Math.round(fallback.max * 1.5);
+      const sugerido = nums.find((n) => Number.isFinite(n) && n >= loMin && n <= hiMax);
+      if (!sugerido) {
         return NextResponse.json(fallback, { status: 200 });
       }
 
