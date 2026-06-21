@@ -98,7 +98,7 @@ export async function GET(request) {
               `Dame UN precio por hora competitivo y realista (solo el número entero).`,
           },
         ],
-        maxOutputTokens: 16,
+        maxOutputTokens: 64,
         temperature: 0.2,
       });
 
