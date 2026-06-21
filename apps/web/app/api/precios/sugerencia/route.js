@@ -68,55 +68,44 @@ export async function GET(request) {
       min: precios.length ? Math.min(...precios) : 1000,
       max: precios.length ? Math.max(...precios) : 2500,
       razon: precios.length
-        ? `Basado en ${precios.length} estacionamientos cercanos (mediana $${med}/h).`
+        ? `Basado en ${precios.length} estacionamiento(s) cercano(s) (mediana $${med}/h).`
         : 'No hay comparables cercanos; sugerencia base para la zona.',
       comparables: precios.length,
     };
 
     if (!hasGeminiKey() || precios.length === 0) {
-      console.error('PRECIOIA_GATE nokey-or-nocomparables', { key: hasGeminiKey(), comparables: precios.length });
       return NextResponse.json(fallback, { status: 200 });
     }
 
-    // Rate-limit por IP (la IA cuesta): 15/min.
-    const { ok } = rateLimit(`precio:${clientIp(request)}`, { max: 15, windowMs: 60_000 });
-    if (!ok) {
-      console.error('PRECIOIA_GATE ratelimited');
-      return NextResponse.json(fallback, { status: 200 });
-    }
-    console.error('PRECIOIA_GATE calling_gemini');
+    // Rate-limit por IP (la IA cuesta): 20/min.
+    const { ok } = rateLimit(`precio:${clientIp(request)}`, { max: 20, windowMs: 60_000 });
+    if (!ok) return NextResponse.json(fallback, { status: 200 });
 
-    let out = '';
     try {
-      out = await geminiGenerate({
+      // Pedimos SOLO un número: es mucho más robusto que pedir JSON a un modelo flash
+      // (que a veces ignora el modo JSON y responde texto).
+      const out = await geminiGenerate({
         system:
-          'Eres un asesor de precios para un marketplace chileno de estacionamientos (precios en CLP). ' +
-          'Dado el precio por hora de estacionamientos cercanos comparables, sugiere un precio por hora ' +
-          'competitivo y realista para una plaza nueva en la misma zona. Responde SOLO JSON válido con esta ' +
-          'forma EXACTA: {"sugerido": <entero CLP>, "min": <entero>, "max": <entero>, "razon": "<1 frase breve en español>"}. ' +
-          'El precio debe estar dentro del rango de los comparables (ni regalado ni fuera de mercado).',
+          'Eres un asesor de precios para estacionamientos en Chile (precios en CLP). ' +
+          'Responde ÚNICAMENTE con el precio por hora sugerido como un número entero, ' +
+          'sin texto, sin símbolos, sin puntos. Ejemplo de respuesta válida: 2000',
         messages: [
           {
             role: 'user',
             content:
-              `Comuna: ${comuna || 'desconocida'}. ` +
               `Precios por hora de ${precios.length} estacionamientos cercanos (CLP): [${precios.join(', ')}]. ` +
-              `Mediana: ${med}. Sugiere un precio por hora competitivo.`,
+              `Mediana: ${med}. Comuna: ${comuna || 'desconocida'}. ` +
+              `Dame UN precio por hora competitivo y realista (solo el número entero).`,
           },
         ],
-        maxOutputTokens: 200,
-        temperature: 0.3,
-        json: true,
+        maxOutputTokens: 16,
+        temperature: 0.2,
       });
 
-      // Extrae el primer objeto JSON aunque el modelo agregue texto alrededor.
-      const match = String(out).match(/\{[\s\S]*\}/);
-      const parsed = JSON.parse(match ? match[0] : (out || '{}'));
-      // El valor puede venir como número o string ("$2.800", "2800 CLP"); y la clave variar.
-      const toInt = (v) => parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10);
-      const sugerido = toInt(parsed.sugerido ?? parsed.precio ?? parsed.precio_hora ?? parsed.precioSugerido);
+      // Extrae el primer número de la respuesta (tolera "$2.000", "2000 CLP", etc.).
+      const m = String(out).match(/\d[\d.\s]*/);
+      const sugerido = m ? parseInt(m[0].replace(/[^\d]/g, ''), 10) : NaN;
       if (!Number.isFinite(sugerido) || sugerido <= 0) {
-        console.error('PRECIOIA_BADSHAPE', String(out).slice(0, 200));
         return NextResponse.json(fallback, { status: 200 });
       }
 
@@ -125,15 +114,14 @@ export async function GET(request) {
           success: true,
           ia: true,
           sugerido,
-          min: toInt(parsed.min) || fallback.min,
-          max: toInt(parsed.max) || fallback.max,
-          razon: String(parsed.razon || fallback.razon).slice(0, 160),
+          min: fallback.min,
+          max: fallback.max,
+          razon: `Sugerido por IA según ${precios.length} estacionamiento(s) cercano(s) (mediana $${med}/h).`,
           comparables: precios.length,
         },
         { status: 200 },
       );
-    } catch (e) {
-      console.error('PRECIOIA_ERR', e?.message, '| RAW:', String(out).slice(0, 200));
+    } catch {
       return NextResponse.json(fallback, { status: 200 });
     }
   } catch (err) {
