@@ -107,16 +107,21 @@ export async function GET(request) {
       // Extrae el primer objeto JSON aunque el modelo agregue texto alrededor.
       const match = String(out).match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(match ? match[0] : (out || '{}'));
-      const sugerido = Math.round(Number(parsed.sugerido));
-      if (!Number.isFinite(sugerido) || sugerido <= 0) return NextResponse.json(fallback, { status: 200 });
+      // El valor puede venir como número o string ("$2.800", "2800 CLP"); y la clave variar.
+      const toInt = (v) => parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10);
+      const sugerido = toInt(parsed.sugerido ?? parsed.precio ?? parsed.precio_hora ?? parsed.precioSugerido);
+      if (!Number.isFinite(sugerido) || sugerido <= 0) {
+        console.error('PRECIOIA_BADSHAPE', String(out).slice(0, 200));
+        return NextResponse.json(fallback, { status: 200 });
+      }
 
       return NextResponse.json(
         {
           success: true,
           ia: true,
           sugerido,
-          min: Math.round(Number(parsed.min)) || fallback.min,
-          max: Math.round(Number(parsed.max)) || fallback.max,
+          min: toInt(parsed.min) || fallback.min,
+          max: toInt(parsed.max) || fallback.max,
           razon: String(parsed.razon || fallback.razon).slice(0, 160),
           comparables: precios.length,
         },
