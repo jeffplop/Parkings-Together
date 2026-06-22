@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { getServiceSupabase } from '@parkings/supabase-db';
 import { webpayCommit } from '../../../../../src/lib/webpay';
+import { feeMetadata } from '../../../../../src/lib/fees';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -76,6 +77,7 @@ async function handle(request) {
           payment_type_code: result?.payment_type_code,
           response_code: result?.response_code,
           card_last4: result?.card_detail?.card_number,
+          ...feeMetadata(monto),
         },
       })
       .eq('transaction_id', token_ws);

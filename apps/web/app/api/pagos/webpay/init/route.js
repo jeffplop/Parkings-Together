@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseWithToken } from '@parkings/supabase-db';
 import { webpayCreate } from '../../../../../src/lib/webpay';
+import { feeMetadata } from '../../../../../src/lib/fees';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -84,7 +85,7 @@ export async function POST(request) {
     status: 'pending',
     provider: 'webpay',
     transaction_id: tbk.token,
-    metadata: { buy_order: buyOrder },
+    metadata: { buy_order: buyOrder, ...feeMetadata(amt) },
   });
 
   // El frontend debe redirigir con POST token_ws=token a esta url.

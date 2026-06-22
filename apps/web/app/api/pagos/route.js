@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseWithToken } from '@parkings/supabase-db';
 import { createCharge, isValidProvider } from '../../../src/lib/payments';
+import { feeMetadata } from '../../../src/lib/fees';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -106,7 +107,7 @@ export async function POST(request) {
     status: charge.status,
     provider,
     transaction_id: charge.transactionId,
-    metadata: metadata || charge.raw || null,
+    metadata: { ...(metadata || charge.raw || {}), ...feeMetadata(amt) },
   }).select('id, transaction_id, status').single();
 
   if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
