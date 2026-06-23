@@ -57,6 +57,7 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [favCount, setFavCount] = useState(0);
+  const [chatUnread, setChatUnread] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
   const dropdownRef = useRef(null);
@@ -94,6 +95,28 @@ export default function Navbar() {
     api.favoritos.listar().then(res => {
       if (res.success) setFavCount((res.data || []).length);
     }).catch(() => {});
+  }, [user]);
+
+  // ── Realtime unread chat count ──
+  useEffect(() => {
+    if (!user) { setChatUnread(0); return; }
+
+    let channel;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await api.chat.conversaciones();
+        if (!cancelled && res.success) setChatUnread(res.totalUnread || 0);
+      } catch { /* ignore */ }
+    };
+
+    load();
+    channel = supabase
+      .channel('navbar-chat')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes' }, load)
+      .subscribe();
+
+    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
   }, [user]);
 
   // ── Realtime pending reservations count ──
@@ -234,6 +257,15 @@ export default function Navbar() {
                       <Link href="/profile" className="nav-link-cyber dropdown-item" onClick={closeMenus}>
                         <i className="fa-solid fa-user-gear dropdown-icon"></i>
                         <span>Mi Perfil</span>
+                      </Link>
+                      <Link href="/mensajes" className="nav-link-cyber dropdown-item" onClick={closeMenus} style={{ position: 'relative' }}>
+                        <i className="fa-solid fa-comments dropdown-icon"></i>
+                        <span>Mensajes</span>
+                        {chatUnread > 0 && (
+                          <span style={{ marginLeft: 'auto', background: '#3b82f6', color: 'white', borderRadius: '10px', fontSize: '0.7rem', padding: '1px 7px', fontWeight: 900 }}>
+                            {chatUnread}
+                          </span>
+                        )}
                       </Link>
                       <Link href="/reservas" className="nav-link-cyber dropdown-item" onClick={closeMenus} style={{ position: 'relative' }}>
                         <i className="fa-solid fa-calendar-check dropdown-icon"></i>

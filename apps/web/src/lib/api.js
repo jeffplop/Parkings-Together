@@ -197,4 +197,31 @@ export const api = {
         body: JSON.stringify({ estacionamiento_id }),
       }),
   },
+  chat: {
+    // Lista las conversaciones del usuario (con no-leídos y último mensaje).
+    conversaciones: async () =>
+      fetchWithTimeout(`/api/chat/conversaciones`, { headers: await authHeaders() }),
+
+    // Inicia o recupera la conversación con el arrendador de un estacionamiento.
+    iniciar: async (estacionamiento_id) =>
+      fetchWithTimeout(`/api/chat/conversaciones`, {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ estacionamiento_id }),
+      }),
+
+    // Mensajes de una conversación (al pedirlos, la marca como leída).
+    mensajes: async (conversacion_id) =>
+      fetchWithTimeout(`/api/chat/mensajes?conversacion_id=${conversacion_id}`, {
+        headers: await authHeaders(),
+      }),
+
+    // Envía un mensaje.
+    enviar: async (conversacion_id, body) =>
+      fetchWithTimeout(`/api/chat/mensajes`, {
+        method: 'POST',
+        headers: await authHeaders(),
+        body: JSON.stringify({ conversacion_id, body }),
+      }),
+  },
 };

@@ -75,6 +75,7 @@ function MapaPageInner() {
   // ── Selector de plaza ──
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [authToken, setAuthToken] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   // ── Lightbox de fotos (galería ampliada) ──
   const [lightbox, setLightbox] = useState(null); // { photos: [], index: 0 }
@@ -144,6 +145,7 @@ function MapaPageInner() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return;
       setAuthToken(session.access_token);
+      setCurrentUserId(session.user?.id || null);
       api.favoritos.listar().then(res => {
         if (res.success) {
           setFavIds(new Set(res.data.map(f => f.estacionamiento?.id ?? f.estacionamiento_id)));
@@ -638,6 +640,19 @@ function MapaPageInner() {
                 >
                   <i className="fa-solid fa-id-card"></i> Ver perfil completo y reseñas
                 </a>
+                {state.selectedSpot.user_id !== currentUserId && (
+                  <button
+                    onClick={async () => {
+                      if (!authToken) { window.location.href = '/auth'; return; }
+                      const res = await api.chat.iniciar(state.selectedSpot.id);
+                      if (res.success && res.data?.id) window.location.href = `/mensajes?c=${res.data.id}`;
+                      else alert(res.error || 'No se pudo iniciar el chat.');
+                    }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '9px', borderRadius: '10px', border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.08)', color: '#34d399', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', marginBottom: '8px', boxSizing: 'border-box' }}
+                  >
+                    <i className="fa-solid fa-comments"></i> Contactar arrendador
+                  </button>
+                )}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                   <a
                     href={`https://www.google.com/maps/dir/?api=1&destination=${state.selectedSpot.lat},${state.selectedSpot.lng}`}
