@@ -119,6 +119,14 @@ export default function Navbar() {
     return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
   }, [user]);
 
+  // Refresca el contador del chat al navegar (p.ej. al salir de /mensajes ya leido).
+  useEffect(() => {
+    if (!user) return;
+    api.chat.conversaciones()
+      .then((res) => { if (res.success) setChatUnread(res.totalUnread || 0); })
+      .catch(() => {});
+  }, [pathname, user]);
+
   // ── Realtime pending reservations count ──
   useEffect(() => {
     if (!user) { setPendingCount(0); return; }
