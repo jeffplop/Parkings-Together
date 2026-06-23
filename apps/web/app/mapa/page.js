@@ -640,7 +640,7 @@ function MapaPageInner() {
                 >
                   <i className="fa-solid fa-id-card"></i> Ver perfil completo y reseñas
                 </a>
-                {state.selectedSpot.user_id !== currentUserId && (
+                {state.selectedSpot.user_id && state.selectedSpot.user_id !== currentUserId && (
                   <button
                     onClick={async () => {
                       if (!authToken) { window.location.href = '/auth'; return; }
