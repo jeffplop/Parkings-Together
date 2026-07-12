@@ -11,6 +11,55 @@ jest.mock('../app/api/v1/reserve/repositories/reserva.repository', () => ({
   }
 }));
 
+// ─── checkAvailability ────────────────────────────────────────────────────────
+describe('ReserveService.checkAvailability', () => {
+  test('retorna available=true cuando hay plazas libres', async () => {
+    ReserveRepository.getParkingAvailability.mockResolvedValue({
+      occupied_spots: 3, total_spots: 10, id: 'p-1'
+    });
+    const result = await ReserveService.checkAvailability('p-1');
+    expect(result.available).toBe(true);
+    expect(result.spots_left).toBe(7);
+  });
+
+  test('retorna available=false cuando está lleno', async () => {
+    ReserveRepository.getParkingAvailability.mockResolvedValue({
+      occupied_spots: 10, total_spots: 10, id: 'p-2'
+    });
+    const result = await ReserveService.checkAvailability('p-2');
+    expect(result.available).toBe(false);
+    expect(result.spots_left).toBe(0);
+  });
+
+  test('incluye los datos crudos del estacionamiento en result.data', async () => {
+    const raw = { occupied_spots: 1, total_spots: 5, id: 'p-3', nombre: 'Central' };
+    ReserveRepository.getParkingAvailability.mockResolvedValue(raw);
+    const result = await ReserveService.checkAvailability('p-3');
+    expect(result.data).toEqual(raw);
+  });
+});
+
+// ─── processSaga — happy path ─────────────────────────────────────────────────
+describe('ReserveService.processSaga — happy path', () => {
+  test('crea la reserva y actualiza la ocupación cuando hay cupo', async () => {
+    ReserveRepository.getParkingAvailability.mockResolvedValue({
+      occupied_spots: 2, total_spots: 10, id: 'p-4'
+    });
+    const nuevaReserva = { id: 'res-happy', estacionamiento_id: 'p-4', estado: 'activa' };
+    ReserveRepository.createReserve.mockResolvedValue(nuevaReserva);
+    ReserveRepository.updateParkingOccupancy.mockResolvedValue({ occupied_spots: 3 });
+
+    const result = await ReserveService.processSaga({ parking_id: 'p-4', user_id: 'u-1' });
+
+    expect(result).toEqual(nuevaReserva);
+    expect(ReserveRepository.createReserve).toHaveBeenCalledWith(
+      expect.objectContaining({ estacionamiento_id: 'p-4', estado: 'activa' })
+    );
+    expect(ReserveRepository.updateParkingOccupancy).toHaveBeenCalledWith('p-4', 3);
+    expect(ReserveRepository.deleteReserve).not.toHaveBeenCalled();
+  });
+});
+
 describe('Domain-Driven Design: Saga de Reservas', () => {
   beforeEach(() => {
     jest.clearAllMocks();
