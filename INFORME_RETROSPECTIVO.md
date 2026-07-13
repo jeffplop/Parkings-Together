@@ -12,6 +12,52 @@ Parkings Together es un marketplace P2P de estacionamientos que conecta conducto
 
 ---
 
+## Diagrama de Arquitectura General
+
+```
+                        ┌──────────────────────┐
+                        │      Navegador        │
+                        │  (React / Next.js)    │
+                        └──────────┬───────────┘
+                                   │ HTTPS
+                                   ▼
+              ┌────────────────────────────────────────┐
+              │         apps/web  (Vercel)             │
+              │                                        │
+              │  ┌─────────────┐   ┌────────────────┐ │
+              │  │  App Router │   │   BFF /api/*   │ │
+              │  │  (páginas   │◄──│  signup        │ │
+              │  │   React)    │   │  mapas/search  │ │
+              │  └─────────────┘   │  reservas/mgmt │ │
+              │                    │  favoritos     │ │
+              │   @parkings/       │  premium       │ │
+              │   supabase-db ─────┤  pagos/webpay  │ │
+              │   (Singleton)      └───────┬────────┘ │
+              └──────────────────────────┬─┘──────────┘
+                         ┌──────────────┘
+                         │ (opcional vía env vars)
+           ┌─────────────┼──────────────────┐
+           ▼             ▼                  ▼
+  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+  │  apps/auth   │ │ apps/ms-     │ │ apps/ms-     │
+  │  puerto 3001 │ │ mapas        │ │ reservas     │
+  │  (Render)    │ │ puerto 3002  │ │ puerto 3003  │
+  │              │ │ (Render)     │ │ (Render)     │
+  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+         │                │                │
+         └────────────────┼────────────────┘
+                          ▼
+          ┌───────────────────────────────┐
+          │   Supabase (PostgreSQL 17)    │
+          │  Auth · RLS · PostGIS ·       │
+          │  Realtime · Storage           │
+          └───────────────────────────────┘
+```
+
+> El BFF en `apps/web` accede directamente a Supabase en producción. Los microservicios (`auth`, `ms-mapas`, `ms-reservas`) son activados mediante variables de entorno y operan como capa adicional en entornos especializados o desarrollo local.
+
+---
+
 ## 1. Arquitectura
 
 ### Decisión tomada
@@ -103,6 +149,30 @@ El patrón **Saga** fue el más valioso en producción. La función `processSaga
 
 El patrón **Strategy** en pagos permitió iterar rápido: primero se implementó `chargeMock`, luego `chargeEfectivo`, y la integración real de Webpay queda preparada sin tocar la ruta `/api/pagos`.
 
+El siguiente fragmento resume cómo el Saga garantiza la consistencia: si el paso 3 falla, la reserva creada en el paso 2 se elimina antes de propagar el error:
+
+```js
+// apps/ms-reservas/app/api/v1/reserve/services/reserva.service.js
+async processSaga(payload) {
+  // 1. Verificación de disponibilidad (CQRS — solo lectura)
+  const parking = await ReserveRepository.getParkingAvailability(parking_id);
+  if (parking.occupied_spots >= parking.total_spots)
+    throw new Error('El estacionamiento ya está lleno.');
+
+  // 2. Crear la reserva
+  const reserva = await ReserveRepository.createReserve({ ...reservaData });
+
+  // 3. Incrementar ocupación — si falla, compensar
+  try {
+    await ReserveRepository.updateParkingOccupancy(parking_id, parking.occupied_spots + 1);
+  } catch {
+    await ReserveRepository.deleteReserve(reserva.id); // rollback
+    throw new Error('Saga Compensada.');
+  }
+  return reserva;
+}
+```
+
 ### Desventajas
 
 - El **CQRS** implementado es "CQRS simple": no hay bus de comandos real ni proyecciones separadas. Es una separación de lectura/escritura en el mismo servicio, lo que limita su escalabilidad a largo plazo.
@@ -193,7 +263,7 @@ La RPC `obtener_resenas` fallaba en producción porque la función no existía e
 
 ### Decisión tomada
 
-Se implementaron **124 tests** en 8 suites (71 con Jest + 6 con el runner nativo de Node.js + 47 tests nuevos agregados en la fase final), distribuidos en:
+Se implementaron **167 tests** distribuidos en 12 suites, cubriendo las cuatro aplicaciones del monorepo:
 
 | Suite | Tests | Qué valida |
 |---|---|---|
@@ -204,7 +274,11 @@ Se implementaron **124 tests** en 8 suites (71 con Jest + 6 con el runner nativo
 | `geocoding.test.js` | 8 | Detección de las 16 regiones de Chile por coordenadas |
 | `api.timeout.test.js` | 2 | Timeout con AbortController y fallback |
 | `rateLimit.test.js` | 5 | Rate limiting por IP con ventana deslizante |
-| `reserveService.test.js` | 2 | Patrón Saga: rechazo por cupo lleno y rollback compensatorio |
+| `reserveService.test.js` | 7 | Saga: cupo lleno, rollback compensatorio, happy path, checkAvailability |
+| `authService.test.js` | 7 | Login con metadata de usuario, fallbacks de nombre, registro con rol |
+| `authController.test.js` | 9 | Validación de campos obligatorios, status 401/400/201 |
+| `mapService.test.js` | 8 | Normalización de coords, precio base, defaults de negocio |
+| `mapController.test.js` | 12 | Validación de todos los métodos HTTP del controlador |
 | `api.test.js` (node:test) | 6 | Contratos HTTP del BFF vía mocks de fetch |
 
 **Cobertura final:**
