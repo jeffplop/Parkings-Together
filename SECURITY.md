@@ -32,26 +32,49 @@ Detalle completo en [`docs/AUDIT_002_seguridad_rls.md`](docs/AUDIT_002_seguridad
 
 Auditado con `npm audit` en la versión actual. **Vulnerabilidades accionables: 0.**
 
-Las 5 alertas restantes se han analizado individualmente y se documentan aquí como
-**riesgo aceptado con justificación**, no como deuda ignorada.
+`npm audit` reporta **29 alertas**, pero esa cifra confunde: cuenta *cada paquete de cada
+cadena afectada*. Al agrupar por su causa real quedan **3 advisories raíz**, analizados uno
+a uno a continuación. Ninguno es accionable sin causar un daño mayor, y ninguno es
+alcanzable desde producción.
 
-### Alcanzables solo en desarrollo (2)
+### 1. `brace-expansion` — solo herramientas de desarrollo
 
-| Paquete | Cadena | Por qué no es accionable |
+- **Advisory:** [GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg) —
+  DoS por expansión no acotada al procesar *globs*.
+- **Cadena:** `eslint`, sus plugins, `glob` y `test-exclude` (cobertura de Jest), todos a
+  través de `minimatch@3`, que fija `brace-expansion@^1.1.7`.
+- **Por qué no se corrige:** el advisory exige `>=5.0.8` y **no existe parche en la línea
+  1.x**. Se probó forzar `5.0.8` mediante `overrides`: **rompe ESLint** con un fallo en
+  `@eslint/config-array` (`pathMatches`). Se revirtió a `1.1.16`, que sí cierra el advisory
+  previo de expansión exponencial.
+- **Riesgo real:** nulo en producción. Ese código nunca se despliega, y los únicos *globs*
+  que procesa son las rutas de nuestros propios ficheros. La ruta de producción
+  (`@swagger-api/apidom-reference`) ya resuelve `brace-expansion@5.0.8`, que **no** es
+  vulnerable.
+
+### 2 y 3. `postcss` y `sharp` — empaquetados dentro de Next.js
+
+- **Cadena:** ambos van dentro de `next@16.2.11`.
+- **Por qué no se corrigen:** el "arreglo" que propone `npm audit` es **bajar a
+  `next@9.3.3`**, una versión mayor de hace siete años con vulnerabilidades muy superiores
+  a las que resolvería.
+- **Riesgo real:** el XSS de `postcss` requiere procesar CSS de origen no confiable, y el
+  proyecto solo compila su propio CSS. `sharp` corresponde al optimizador de imágenes de
+  Next.
+- **Plan:** se resolverá al publicar Next una versión con esas dependencias actualizadas.
+  Dependabot abrirá el pull request automáticamente (ver `.github/dependabot.yml`).
+
+### Correcciones aplicadas en esta versión
+
+| Vulnerabilidad | Severidad | Cómo se cerró |
 |---|---|---|
-| `js-yaml@3.14.2` | `babel-jest → babel-plugin-istanbul → @istanbuljs/load-nyc-config` | Herramienta de **cobertura de pruebas**; no se empaqueta en producción. `load-nyc-config` fija `js-yaml@^3.13.1`; forzar la v4 rompe su API. La ruta de **producción** (`swagger-ui-react`) ya usa `js-yaml@4.3.0`, que **no** es vulnerable. |
-| `brace-expansion@1.1.14` | `babel-jest → … → minimatch@3` | Solo en el ejecutor de pruebas. `minimatch@3` fija `brace-expansion@^1.1.7`. El vector es una DoS al expandir *globs*, y los únicos globs que se procesan son las rutas de nuestros propios tests. |
-
-### Empaquetadas dentro del framework (3)
-
-| Paquete | Cadena | Por qué no es accionable |
-|---|---|---|
-| `postcss@8.4.31` | dentro de `next@16.2.11` | El "arreglo" que propone `npm audit` es **bajar a `next@9.3.3`** — una versión mayor de hace siete años, con vulnerabilidades muy superiores. El XSS requiere procesar CSS de origen no confiable; el proyecto solo compila su propio CSS. |
-| `sharp@0.34.5` | dentro de `next@16.2.11` | Ídem. Corresponde al optimizador de imágenes de Next.js. Se resolverá cuando Next publique una versión con la dependencia actualizada. |
-| `next@16.2.11` | — | Marcado únicamente por arrastre de los dos anteriores. |
-
-> **Cerrada en esta versión:** `next` tenía una vulnerabilidad **alta** propia —*Middleware /
-> Proxy bypass in App Router applications*— corregida al fijar `next@16.2.11`.
+| Next.js — *Middleware / Proxy bypass in App Router* | **Alta** | Fijar `next@16.2.11` |
+| `immutable` — desbordamiento de trie en `List` | Alta | `swagger-ui-react` 5.32.6 → 5.32.11 (pasa a `immutable ^4.3.9`) |
+| `js-yaml` — DoS cuadrática en *merge keys* | Alta | Ídem (pasa a `js-yaml =4.3.0`) + `override` a `3.15.0` en la cadena de cobertura |
+| `dompurify` — bypass de `afterSanitizeElements` | Moderada | Ídem (pasa a `dompurify ^3.4.12`) |
+| `brace-expansion` — expansión exponencial | Alta | `override` a `1.1.16` |
+| `@babel/core` — lectura de ficheros vía `sourceMappingURL` | Baja | `@babel/core@7.29.7` |
+| Turbo — ejecución local de código y CSRF en el callback de login | Moderada | `turbo@2.10.7` |
 
 ### Advertencia operativa
 

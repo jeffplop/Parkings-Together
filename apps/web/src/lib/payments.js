@@ -1,19 +1,29 @@
 // ════════════════════════════════════════════════════════════════════════════
-// Capa de abstracción de pagos
+// Capa de abstracción de pagos (patrón Strategy)
 // ────────────────────────────────────────────────────────────────────────────
-// Aísla la ruta /api/pagos del proveedor concreto. Hoy soporta:
+// Aísla la ruta POST /api/pagos del proveedor concreto. Soporta:
 //   • 'mock'     → cobro simulado e inmediato (demos / desarrollo)
 //   • 'efectivo' → pago al llegar; queda 'pending' hasta que el arrendador cobre
-//   • 'webpay'   → punto de integración real con Transbank (Webpay Plus)
+//   • 'webpay'   → registro simulado, para dejar constancia del pago en la reserva
 //
 // Todos los proveedores devuelven un resultado uniforme:
 //   { status: 'completed' | 'pending' | 'failed', transactionId: string, raw: object }
 //
-// Para activar Webpay real:
-//   1. npm i @transbank/sdk
-//   2. Definir TRANSBANK_COMMERCE_CODE, TRANSBANK_API_KEY y TRANSBANK_ENV.
-//   3. Descomentar el bloque de integración en chargeWebpay() y el commit en el
-//      endpoint de retorno (return_url) / webhook.
+// ⚠️  IMPORTANTE — el cobro REAL con Webpay NO pasa por aquí.
+//
+// Webpay Plus exige un flujo con redirección (crear transacción → el usuario paga
+// en el sitio de Transbank → vuelve al `return_url` → se confirma con *commit*),
+// que no encaja en la firma síncrona `charge() → resultado` de esta capa.
+//
+// La integración real vive en:
+//   • `src/lib/webpay.js`                  — cliente REST de Transbank (sin SDK)
+//   • `app/api/pagos/webpay/init/route.js` — crea la transacción y devuelve la URL
+//   • `app/api/pagos/webpay/return/route.js` — confirma (commit) al regresar
+//
+// Y se configura con las variables `TBK_ENV`, `TBK_COMMERCE_CODE` y `TBK_API_KEY`
+// (por defecto: ambiente de INTEGRACIÓN de Transbank con credenciales públicas de
+// prueba). Ojo: son distintas de las `TRANSBANK_*` que lee `isWebpayConfigured()`
+// más abajo, que solo gobiernan esta ruta simulada.
 // ════════════════════════════════════════════════════════════════════════════
 
 export const PAYMENT_PROVIDERS = Object.freeze(['mock', 'efectivo', 'webpay']);
@@ -41,41 +51,32 @@ async function chargeEfectivo() {
   return { status: 'pending', transactionId: genTransactionId('CASH'), raw: { method: 'efectivo' } };
 }
 
-// Los cuatro parámetros son el contrato que exige `WebpayPlus.Transaction.create()`
-// (ver la integración real más abajo, pendiente de activar). Se mantienen con su
-// nombre real —en lugar de prefijarlos con `_`— para que al descomentar el bloque
-// siga compilando y la firma documente el contrato.
-// eslint-disable-next-line no-unused-vars
-async function chargeWebpay({ amount, buyOrder, sessionId, returnUrl }) {
+// Registro de un pago marcado como 'webpay' desde POST /api/pagos.
+//
+// El cobro real NO ocurre aquí: Webpay exige redirección y se implementa en
+// `src/lib/webpay.js` + `app/api/pagos/webpay/{init,return}` (ver la cabecera de
+// este archivo). Esta función solo deja constancia del pago asociado a la reserva
+// cuando el flujo con redirección no se ha usado.
+async function chargeWebpay() {
   if (!isWebpayConfigured()) {
-    // Sin credenciales de Transbank: se simula para no bloquear el flujo en
-    // demos/desarrollo. En producción, define las variables de entorno.
     return {
       status: 'completed',
       transactionId: genTransactionId('WP-SIM'),
-      raw: { simulated: true, provider: 'webpay', note: 'Transbank no configurado — cobro simulado' },
+      raw: {
+        simulated: true,
+        provider: 'webpay',
+        note: 'Registro simulado. El cobro real se hace en /api/pagos/webpay/init.',
+      },
     };
   }
-
-  // ── Integración real con Transbank (activar tras `npm i @transbank/sdk`) ──
-  // const { WebpayPlus, Options, Environment } = await import('@transbank/sdk');
-  // const env = process.env.TRANSBANK_ENV === 'production'
-  //   ? Environment.Production : Environment.Integration;
-  // const options = new Options(
-  //   process.env.TRANSBANK_COMMERCE_CODE,
-  //   process.env.TRANSBANK_API_KEY,
-  //   env,
-  // );
-  // const resp = await new WebpayPlus.Transaction(options)
-  //   .create(buyOrder, sessionId, amount, returnUrl);
-  // // resp.url + resp.token → el cliente debe redirigir a resp.url?token_ws=resp.token
-  // // El commit se hace en el endpoint de retorno con .commit(token).
-  // return { status: 'pending', transactionId: resp.token, raw: resp };
 
   return {
     status: 'completed',
     transactionId: genTransactionId('WP'),
-    raw: { configured: true, pendingImplementation: true },
+    raw: {
+      configured: true,
+      note: 'Registro simulado. El cobro real se hace en /api/pagos/webpay/init.',
+    },
   };
 }
 
