@@ -11,7 +11,7 @@ Sistema peer-to-peer que conecta conductores con propietarios de estacionamiento
 ```
 Parkings-Together/
 ├── apps/
-│   ├── web/           ← Next.js 14 — Frontend PWA + BFF
+│   ├── web/           ← Next.js 16 — Frontend PWA + BFF
 │   ├── ms-mapas/      ← Microservicio de mapas (puerto 3002)
 │   ├── ms-reservas/   ← Microservicio de reservas (puerto 3003)
 │   └── auth/          ← Microservicio de autenticación (puerto 3001)
@@ -145,8 +145,8 @@ cd apps/ms-reservas && npm test
 
 | Tecnología     | Uso                                                  |
 |----------------|------------------------------------------------------|
-| Next.js 14     | Frontend PWA + BFF (API Routes)                      |
-| React 18       | UI reactiva con hooks                                |
+| Next.js 16     | Frontend PWA + BFF (API Routes)                      |
+| React 19       | UI reactiva con hooks                                |
 | Supabase       | PostgreSQL + Auth + Realtime (WebSockets) + PostGIS  |
 | Leaflet.js     | Mapas interactivos con geolocalización               |
 | TailwindCSS    | Estilos utilitarios                                  |

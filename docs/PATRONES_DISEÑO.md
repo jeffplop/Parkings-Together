@@ -11,7 +11,7 @@
 
 Los patrones de diseño son soluciones probadas y reutilizables para problemas recurrentes en el desarrollo de software. Su uso sistemático mejora la mantenibilidad, testabilidad y escalabilidad de los sistemas, facilitando además la comunicación entre los miembros del equipo mediante un vocabulario técnico compartido.
 
-**Parkings Together** es una plataforma de movilidad urbana que conecta conductores con propietarios de estacionamientos mediante un modelo Peer-to-Peer. El sistema está construido sobre una arquitectura de microservicios en monorepo (Turborepo), con un frontend Next.js 14 que actúa como BFF (Backend For Frontend), tres microservicios independientes y un paquete compartido de base de datos.
+**Parkings Together** es una plataforma de movilidad urbana que conecta conductores con propietarios de estacionamientos mediante un modelo Peer-to-Peer. El sistema está construido sobre una arquitectura de microservicios en monorepo (Turborepo), con un frontend Next.js 16 que actúa como BFF (Backend For Frontend), tres microservicios independientes y un paquete compartido de base de datos.
 
 Dada la complejidad del dominio —reservas con transacciones compensatorias, pagos multi-proveedor, tiempo real con WebSockets y autenticación centralizada— el proyecto aplica una amplia variedad de patrones de diseño tanto en el frontend como en el backend.
 
