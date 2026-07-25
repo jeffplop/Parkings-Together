@@ -165,7 +165,7 @@ export default function ProfilePage() {
       if (error) throw error;
       setVehiculos(prev => prev.filter(v => v.id !== id));
       toast.success('Vehículo removido');
-    } catch (error) {
+    } catch {
       toast.error('Error al remover vehículo');
     }
   };
@@ -180,7 +180,7 @@ export default function ProfilePage() {
       });
       if (error) throw error;
       toast.success(newValue ? 'Mostrando solo estacionamientos accesibles' : 'Mostrando todos los estacionamientos');
-    } catch (error) {
+    } catch {
       setPerfil(prev => ({ ...prev, requiere_pmr: !newValue }));
       toast.error('Error al actualizar preferencias');
     }

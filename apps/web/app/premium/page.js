@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import './premium.css';
 import { supabase } from '@parkings/supabase-db';
 import { api } from '../../src/lib/api';
-import { PLANES, precioCiclo, mesesToPayback, NIVELES_CONDUCTOR, BADGES, FAQ, COMISION_PLATAFORMA } from '../../src/lib/planes';
+import { PLANES, precioCiclo, BADGES, FAQ, COMISION_PLATAFORMA } from '../../src/lib/planes';
 
 const fmt = (n) => n === 0 ? 'Gratis' : `$${n.toLocaleString('es-CL')}`;
 
@@ -192,7 +192,6 @@ function ComparativaSection() {
     { key: 'ep', label: 'EasyPark',          icon: 'fa-circle',       color: '#64748b', highlight: false },
   ];
 
-  const ptScore = features.filter(f => f.pt).length;
 
   return (
     <section className="comp-section">

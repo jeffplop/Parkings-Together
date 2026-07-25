@@ -6,7 +6,7 @@ import { supabase } from '@parkings/supabase-db';
 import { toast } from 'react-hot-toast';
 
 export function useMapRadar() {
-  const { location: gpsLoc, locationSource, isLoading: isLocating, error: locError, userProfile } = useGeolocation();
+  const { location: gpsLoc, locationSource, userProfile } = useGeolocation();
   // locOverride is cleared after one load cycle so live GPS resumes automatically
   const [locOverride, setLocOverride] = useState(null);
   const userLoc = locOverride || gpsLoc;
@@ -29,7 +29,7 @@ export function useMapRadar() {
       const res = await fetch(`/api/mapas/search?radius=${r}&lat=${lat}&lng=${lng}`, { cache: 'no-store' });
       const data = await res.json();
       return data.success ? data.data : [];
-    } catch (e) { return []; }
+    } catch { return []; }
   };
 
   const debounceRef = useRef(null);

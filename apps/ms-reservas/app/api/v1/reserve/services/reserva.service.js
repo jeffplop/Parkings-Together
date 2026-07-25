@@ -2,7 +2,7 @@ import { ReserveRepository } from '../repositories/reserva.repository';
 
 export const ReserveService = {
   async processSaga(payload) {
-    const { parking_id, user_id, start_time, duration_hours } = payload;
+    const { parking_id, user_id, start_time } = payload;
 
     // 1. Verificación CQRS
     const parking = await ReserveRepository.getParkingAvailability(parking_id);
@@ -22,7 +22,7 @@ export const ReserveService = {
     // 3. Compensación Saga
     try {
       await ReserveRepository.updateParkingOccupancy(parking_id, parking.occupied_spots + 1);
-    } catch (error) {
+    } catch {
       // Rollback (Compensación)
       await ReserveRepository.deleteReserve(reserva.id);
       throw new Error('Fallo al actualizar ocupación. Reserva revertida por seguridad (Saga Compensada).');

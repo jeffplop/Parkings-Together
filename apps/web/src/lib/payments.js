@@ -41,6 +41,11 @@ async function chargeEfectivo() {
   return { status: 'pending', transactionId: genTransactionId('CASH'), raw: { method: 'efectivo' } };
 }
 
+// Los cuatro parámetros son el contrato que exige `WebpayPlus.Transaction.create()`
+// (ver la integración real más abajo, pendiente de activar). Se mantienen con su
+// nombre real —en lugar de prefijarlos con `_`— para que al descomentar el bloque
+// siga compilando y la firma documente el contrato.
+// eslint-disable-next-line no-unused-vars
 async function chargeWebpay({ amount, buyOrder, sessionId, returnUrl }) {
   if (!isWebpayConfigured()) {
     // Sin credenciales de Transbank: se simula para no bloquear el flujo en
