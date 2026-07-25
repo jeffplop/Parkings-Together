@@ -150,7 +150,7 @@ mensajería en tiempo real.
 
 ---
 
-## [0.7.0] — 2026-06-05
+## [0.7.0] — 2026-06-05 · `67833ff`
 
 ### Añadido
 - Panel del conductor y vista de reservas según el rol del usuario.
@@ -175,7 +175,7 @@ mensajería en tiempo real.
 
 ---
 
-## [0.5.0] — 2026-06-03
+## [0.5.0] — 2026-06-04 · `f81eac3`
 
 ### Añadido
 - **Selector de plaza específica** con disposición tipo sala de cine.
@@ -187,7 +187,7 @@ mensajería en tiempo real.
 
 ---
 
-## [0.4.0] — 2026-06-02 · `86688e2`
+## [0.4.0] — 2026-06-03 · `86688e2`
 
 ### Añadido
 - **Reservas profesionales** con ventana de tiempo (reserva anticipada), además de la
@@ -201,7 +201,7 @@ mensajería en tiempo real.
 
 ---
 
-## [0.3.0] — 2026-05-31
+## [0.3.0] — 2026-05-31 · `a5287c2`
 
 ### Añadido
 - **Radar de proximidad** en el mapa.
@@ -219,7 +219,7 @@ mensajería en tiempo real.
 
 ---
 
-## [0.1.0] — 2026-03-17
+## [0.1.0] — 2026-03-17 · `8cf5cc3`
 
 ### Añadido
 - Estructura inicial del monorepo con Turborepo.
