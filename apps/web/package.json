@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "test": "node --test tests/api.test.js",
-    "test:unit": "jest"
+    "test:unit": "jest",
+    "lint": "next lint --dir . || eslint ."
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
@@ -16,12 +17,12 @@
     "leaflet": "^1.9.4",
     "leaflet.heat": "^0.2.0",
     "leaflet.markercluster": "^1.5.3",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
+    "next": "16.2.11",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
     "react-hook-form": "^7.76.1",
     "react-hot-toast": "^2.6.0",
-    "swagger-ui-react": "^5.32.6",
+    "swagger-ui-react": "5.32.11",
     "zod": "^4.4.3"
   }
 }

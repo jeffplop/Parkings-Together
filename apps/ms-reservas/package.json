@@ -6,12 +6,13 @@
     "dev": "next dev -p 3003",
     "build": "next build",
     "start": "next start",
-    "test": "jest --rootDir ../.. apps/ms-reservas/tests"
+    "test": "jest --rootDir ../.. apps/ms-reservas/tests",
+    "lint": "next lint --dir . || eslint ."
   },
   "dependencies": {
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "@parkings/supabase-db": "*"
+    "@parkings/supabase-db": "*",
+    "next": "16.2.11",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
   }
 }
