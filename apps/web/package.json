@@ -11,7 +11,7 @@
     "lint": "next lint --dir . || eslint ."
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.4.0",
+    "@hookform/resolvers": "^5.8.0",
     "@parkings/supabase-db": "^1.0.0",
     "leaflet": "^1.9.4",
     "leaflet.heat": "^0.2.0",
