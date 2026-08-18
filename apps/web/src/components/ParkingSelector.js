@@ -276,8 +276,6 @@ export default function ParkingSelector({ parking, onClose, onReserve, isReservi
     onClose();
   };
 
-  // ── Pricing header: show which rates are configured ──
-  const hasPricing = parking.precio_hora || parking.price_per_day || parking.price_per_minute;
 
   return (
     <div

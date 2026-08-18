@@ -174,7 +174,7 @@ export default function RankingPage() {
             <>
               <div className="section-label"><i className="fa-solid fa-trophy"></i> Top 3</div>
               <section className="podio">
-                {[podio[1], podio[0], podio[2]].filter(Boolean).map((p, visualIdx) => {
+                {[podio[1], podio[0], podio[2]].filter(Boolean).map((p) => {
                   const realIdx = podio.indexOf(p);
                   return (
                     <article key={p.id} className={`podio-card pos-${realIdx}`} onClick={() => irAlMapa(p)} style={{ '--medal': MEDALLAS[realIdx] }}>

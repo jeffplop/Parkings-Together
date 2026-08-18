@@ -40,12 +40,6 @@ export default function DashboardPage() {
   const [pricePerDay,    setPricePerDay]    = useState('');
 
   // Vehicle types
-  const VEHICLE_TYPES = [
-    { id: 'car',        label: 'Auto',      icon: 'fa-car'           },
-    { id: 'motorcycle', label: 'Moto',      icon: 'fa-motorcycle'    },
-    { id: 'bicycle',    label: 'Bicicleta', icon: 'fa-bicycle'       },
-    { id: 'scooter',    label: 'Scooter',   icon: 'fa-person-biking' },
-  ];
   const [allowedVehicleTypes, setAllowedVehicleTypes] = useState(['car']);
   const toggleVehicle = (id) => setAllowedVehicleTypes(prev =>
     prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
@@ -97,7 +91,7 @@ export default function DashboardPage() {
       try {
         const { data: profileData } = await supabase.from('perfiles').select('rol, nombre').eq('id', authSession.user.id).single();
         profile = profileData;
-      } catch (e) {
+      } catch {
         if (process.env.NODE_ENV === 'development') console.warn('[Dashboard] Perfil no disponible, usando fallback de auth metadata');
       }
       
@@ -291,7 +285,7 @@ export default function DashboardPage() {
       } else {
         throw new Error(res.error);
       }
-    } catch (error) {
+    } catch {
       setMyParkings(prev => prev.map(p => p.id === id ? { ...p, occupied_spots: currentOccupied } : p));
       showToast('Error al actualizar los cupos', 'error');
     }

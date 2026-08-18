@@ -1,0 +1,43 @@
+version: 2
+
+updates:
+  # ── Dependencias npm del monorepo ────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Santiago
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    labels: ["dependencias", "automatizado"]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: scope
+
+    groups:
+      # Next.js y React se actualizan juntos: sus versiones están acopladas y
+      # separarlas produce pull requests que no compilan.
+      next-react:
+        patterns: ["next", "react", "react-dom", "eslint-config-next"]
+      # Herramientas de desarrollo agrupadas para no generar ruido de PRs.
+      herramientas-dev:
+        dependency-type: development
+        patterns: ["jest", "@jest/*", "babel-jest", "@babel/*", "eslint", "@eslint/*", "turbo", "@testing-library/*"]
+
+    ignore:
+      # Las versiones mayores se evalúan a mano: implican migración y no deben
+      # entrar por un PR automático.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ── Acciones de GitHub usadas por el CI ──────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: ["ci", "automatizado"]
+    commit-message:
+      prefix: "ci(deps)"

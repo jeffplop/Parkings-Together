@@ -101,7 +101,6 @@ export default function Navbar() {
   useEffect(() => {
     if (!user) { setChatUnread(0); return; }
 
-    let channel;
     let cancelled = false;
     const load = async () => {
       try {
@@ -111,12 +110,12 @@ export default function Navbar() {
     };
 
     load();
-    channel = supabase
+    const channel = supabase
       .channel('navbar-chat')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes' }, load)
       .subscribe();
 
-    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
+    return () => { cancelled = true; supabase.removeChannel(channel); };
   }, [user]);
 
   // Refresca el contador del chat al navegar (p.ej. al salir de /mensajes ya leido).

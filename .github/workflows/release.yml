@@ -1,0 +1,90 @@
+name: Release
+
+# Se dispara al publicar una etiqueta de versión (vX.Y.Z).
+# El flujo es: actualizar CHANGELOG.md -> git tag vX.Y.Z -> git push --tags
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Etiqueta a publicar (ej. v1.4.0)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  NEXT_PUBLIC_SUPABASE_URL: "http://mock-supabase.local"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "mock-anon-key-12345"
+  SUPABASE_URL: "http://mock-supabase.local"
+  SUPABASE_SERVICE_ROLE_KEY: "mock-service-key-12345"
+
+jobs:
+  release:
+    name: Validar y publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # historial completo: necesario para generar las notas
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Una etiqueta no debe publicarse si el código no pasa el control de calidad.
+      - name: Lint
+        run: npx eslint .
+
+      - name: Pruebas
+        run: npx jest --ci
+
+      - name: Build
+        run: npx turbo run build
+
+      - name: Determinar versión
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "numero=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Extraer notas del CHANGELOG
+        id: notas
+        run: |
+          VER="${{ steps.version.outputs.numero }}"
+          # Toma la sección de esta versión, desde su encabezado hasta el siguiente "## [".
+          # Se usa index() en vez de una expresión regular: los corchetes de
+          # "## [1.4.0]" abrirían una clase de caracteres y el patrón no casaría.
+          awk -v hdr="## [$VER]" '
+            index($0, hdr) == 1   { found = 1; next }
+            found && index($0, "## [") == 1 { exit }
+            found { print }
+          ' CHANGELOG.md > notas.md
+
+          if [ ! -s notas.md ]; then
+            echo "::warning::No hay una sección [$VER] en CHANGELOG.md; se usarán notas automáticas."
+            echo "generar_auto=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "generar_auto=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publicar release en GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if [ "${{ steps.notas.outputs.generar_auto }}" = "true" ]; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file notas.md
+          fi

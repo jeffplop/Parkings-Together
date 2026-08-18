@@ -5,16 +5,32 @@
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     "NEXT_PUBLIC_MS_MAPAS_URL",
     "NEXT_PUBLIC_MS_AUTH_URL",
-    "NEXT_PUBLIC_MS_RESERVAS_URL"
+    "NEXT_PUBLIC_MS_RESERVAS_URL",
+    "ANTHROPIC_API_KEY",
+    "TRANSBANK_COMMERCE_CODE",
+    "TRANSBANK_API_KEY",
+    "TRANSBANK_ENV"
+  ],
+  "globalDependencies": [
+    "babel.config.js",
+    "jest.config.js",
+    "jest.setup.js",
+    "eslint.config.mjs"
   ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"]
     },
+    "lint": {
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "clean": {
+      "cache": false
     }
   }
 }

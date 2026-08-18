@@ -48,7 +48,7 @@
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{bff}}/api/mapas/search", "host": ["{{bff}}"], "path": ["api","mapas","search"] },
-            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Estacionamiento Centro\",\n  \"arrendador\": \"María Pérez\",\n  \"lat\": -33.4489,\n  \"lng\": -70.6693,\n  \"totalSpots\": 10,\n  \"esPmr\": false,\n  \"userId\": \"8f1c2e3a-0000-4a11-9b22-aabbccddeeff\"\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"nombre\": \"Estacionamiento Centro\",\n  \"arrendador\": \"María Pérez\",\n  \"lat\": -33.4489,\n  \"lng\": -70.6693,\n  \"totalSpots\": 10,\n  \"esPmr\": false,\n  \"precioHora\": 1500,\n  \"comuna\": \"Santiago\",\n  \"direccion\": \"Av. Siempre Viva 123\"\n}" }
           }
         },
         {
@@ -58,6 +58,24 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{bff}}/api/mapas/search", "host": ["{{bff}}"], "path": ["api","mapas","search"] },
             "body": { "mode": "raw", "raw": "{\n  \"id\": \"1a2b3c4d-0000-4f00-8a00-111122223333\",\n  \"occupied_spots\": 4\n}" }
+          }
+        },
+        {
+          "name": "Publicar / despublicar (toggleActivo)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{bff}}/api/mapas/search", "host": ["{{bff}}"], "path": ["api","mapas","search"] },
+            "body": { "mode": "raw", "raw": "{\n  \"id\": \"1a2b3c4d-0000-4f00-8a00-111122223333\",\n  \"action\": \"toggleActivo\"\n}" }
+          }
+        },
+        {
+          "name": "Editar estacionamiento (updateFull)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{bff}}/api/mapas/search", "host": ["{{bff}}"], "path": ["api","mapas","search"] },
+            "body": { "mode": "raw", "raw": "{\n  \"id\": \"1a2b3c4d-0000-4f00-8a00-111122223333\",\n  \"action\": \"updateFull\",\n  \"nombre\": \"Estacionamiento Centro 2\",\n  \"precioHora\": 1800,\n  \"esPmr\": true\n}" }
           }
         },
         {
@@ -79,12 +97,21 @@
           "request": { "method": "GET", "url": { "raw": "{{bff}}/api/reservas/reserve?parkingId=1a2b3c4d-0000-4f00-8a00-111122223333", "host": ["{{bff}}"], "path": ["api","reservas","reserve"], "query": [{ "key": "parkingId", "value": "1a2b3c4d-0000-4f00-8a00-111122223333" }] } }
         },
         {
-          "name": "Crear reserva (atómica)",
+          "name": "Crear reserva instantánea (atómica)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": { "raw": "{{bff}}/api/reservas/reserve", "host": ["{{bff}}"], "path": ["api","reservas","reserve"] },
             "body": { "mode": "raw", "raw": "{\n  \"parking_id\": \"1a2b3c4d-0000-4f00-8a00-111122223333\",\n  \"user_id\": \"8f1c2e3a-0000-4a11-9b22-aabbccddeeff\"\n}" }
+          }
+        },
+        {
+          "name": "Crear reserva PRO (con horario)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{bff}}/api/reservas/reserve", "host": ["{{bff}}"], "path": ["api","reservas","reserve"] },
+            "body": { "mode": "raw", "raw": "{\n  \"parking_id\": \"1a2b3c4d-0000-4f00-8a00-111122223333\",\n  \"user_id\": \"8f1c2e3a-0000-4a11-9b22-aabbccddeeff\",\n  \"fecha_inicio\": \"2026-06-15T10:00:00Z\",\n  \"fecha_fin\": \"2026-06-15T12:00:00Z\",\n  \"spot_label\": \"A-12\"\n}" }
           }
         }
       ]

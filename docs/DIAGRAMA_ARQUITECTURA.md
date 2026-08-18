@@ -16,7 +16,7 @@
 | Aspecto | Detalle |
 |---|---|
 | **Estilo arquitectónico** | Microservicios + **BFF** (Backend for Frontend), sobre un **monorepo** Turborepo |
-| **Frontend** | PWA Next.js 14 (App Router) + React 18 + Leaflet |
+| **Frontend** | PWA Next.js 16 (App Router) + React 19 + Leaflet |
 | **Backend** | 1 BFF (`apps/web/app/api`) + 3 microservicios independientes (`auth`, `ms-mapas`, `ms-reservas`) |
 | **Persistencia** | Supabase = PostgreSQL 17 + PostGIS + Auth + Realtime + Storage (BaaS compartido) |
 | **Despliegue** | Frontend + BFF → **Vercel** · Microservicios → **Render** · BD → **Supabase** |
@@ -65,7 +65,7 @@ La misma lógica de negocio está disponible por **dos caminos equivalentes**:
 ```mermaid
 flowchart TB
     subgraph CLIENT["🌐 Cliente"]
-        PWA["PWA · Next.js 14 (App Router)<br/>React 18 · Leaflet · Supabase Auth (JWT)"]
+        PWA["PWA · Next.js 16 (App Router)<br/>React 19 · Leaflet · Supabase Auth (JWT)"]
     end
 
     subgraph VERCEL["▲ Vercel — apps/web"]
@@ -234,7 +234,7 @@ documento OpenAPI/Swagger apunta a esas URLs para permitir pruebas en vivo.
 
 | Capa | Tecnología | Uso |
 |---|---|---|
-| Frontend | Next.js 14 (App Router), React 18 | PWA, SSR/CSR, hooks |
+| Frontend | Next.js 16 (App Router), React 19 | PWA, SSR/CSR, hooks |
 | Mapas | Leaflet / react-leaflet | Mapa interactivo, capa térmica en `<canvas>` |
 | Estilos | styled-jsx + CSS global (TailwindCSS) | UI "Neon Glassmorphism" |
 | Backend | Route Handlers de Next.js (Node runtime) | BFF + microservicios |

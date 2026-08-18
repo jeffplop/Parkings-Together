@@ -1,0 +1,62 @@
+name: Reporte de error
+description: Algo no funciona como debería
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportarlo. Cuanto más concreto sea el reporte, antes se corrige.
+
+        > **¿Es un problema de seguridad?** No lo publiques aquí. Usa un
+        > [advisory privado](https://github.com/jeffplop/Parkings-Together/security/advisories/new).
+
+  - type: textarea
+    id: que-pasa
+    attributes:
+      label: Qué ocurre
+      description: Describe el comportamiento observado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Qué esperabas que ocurriera
+    validations:
+      required: true
+
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1. Entrar a /mapa
+        2. Buscar "Santiago Centro"
+        3. Pulsar "Reservar"
+        4. El botón no responde
+    validations:
+      required: true
+
+  - type: dropdown
+    id: entorno
+    attributes:
+      label: Dónde ocurre
+      options:
+        - Producción (parkings-web.vercel.app)
+        - Desarrollo local (npm run dev)
+        - En ambos
+    validations:
+      required: true
+
+  - type: textarea
+    id: consola
+    attributes:
+      label: Errores de consola o de red
+      description: Abre las herramientas de desarrollo (F12) y pega lo relevante.
+      render: text
+
+  - type: input
+    id: navegador
+    attributes:
+      label: Navegador y sistema operativo
+      placeholder: "Chrome 141 · Windows 11"

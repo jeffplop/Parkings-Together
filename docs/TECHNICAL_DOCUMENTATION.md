@@ -66,7 +66,7 @@ La plataforma permite buscar estacionamientos en un mapa interactivo con filtros
 ```
 Parkings-Together/
 ├── apps/
-│   ├── web/                        # Next.js 14 frontend + API routes (port 3000)
+│   ├── web/                        # Next.js 16 frontend + API routes (port 3000)
 │   │   ├── app/                    # App Router — páginas y rutas API
 │   │   │   ├── page.js             # Landing page (CSR)
 │   │   │   ├── layout.js           # Root layout: SEO metadata + PWA viewport

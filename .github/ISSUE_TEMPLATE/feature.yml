@@ -1,0 +1,42 @@
+name: Propuesta de funcionalidad
+description: Sugerir una mejora o una capacidad nueva
+labels: ["mejora"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qué problema resuelve
+      description: >
+        Describe la necesidad del usuario, no la solución técnica. Una propuesta
+        que empieza por "hay que usar X" suele saltarse el porqué.
+      placeholder: "Como conductor, no puedo saber si un estacionamiento tiene techo…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Solución propuesta
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas
+      description: Qué otras opciones evaluaste y por qué las descartaste.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afectada
+      multiple: true
+      options:
+        - Frontend (apps/web)
+        - BFF / API (/api/*)
+        - Microservicios (auth, ms-mapas, ms-reservas)
+        - Base de datos (SQL / RLS)
+        - Documentación
+        - CI/CD
+    validations:
+      required: true
