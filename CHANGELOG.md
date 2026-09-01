@@ -15,7 +15,36 @@ versionado de [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
 ## [No publicado]
 
-Trabajo en curso. Ver [issues abiertos](https://github.com/jeffplop/Parkings-Together/issues).
+> Contiene un **cambio rompiente** (eliminación de `/api/support/chat`). Al publicar,
+> corresponde una versión mayor (`2.0.0`) según SemVer.
+
+### Corregido
+- **El mapa mostraba "API KEY REQUIRED" sobre toda la superficie.** CARTO exige una API
+  key para sus basemaps desde 2025 y, sin ella, devuelve los tiles con esa marca de agua
+  incrustada. Se cambió el proveedor por defecto a **Esri World Dark Gray Base** (oscuro,
+  sin key, sin marca de agua), centralizado en `src/lib/mapTiles.js` y sobreescribible por
+  entorno (`NEXT_PUBLIC_MAP_TILES_URL` / `_ATTRIBUTION`).
+- **`403 Forbidden` en consola al cargar el mapa.** La geolocalización por IP usaba
+  `ip-api.com`, cuyo tier gratuito es solo HTTP y devuelve 403 desde una página HTTPS. El
+  usuario que negaba el GPS acababa **siempre** en Santiago, ignorando su ciudad. Se
+  reemplazó por `geojs` (primario) e `ipwho.is` (respaldo), ambos keyless sobre HTTPS.
+- Dos avisos de lint reales: directiva `eslint-disable` muerta en `profile/page.js` y un
+  `console.log` de producción en `gemini.js` (ahora `console.warn` solo en desarrollo).
+
+### Eliminado
+- **Chat de soporte con IA** (widget flotante "Dareko"): componente `SupportChat.js`, ruta
+  `POST /api/support/chat` y su documentación en el OpenAPI. La **mensajería en tiempo real
+  conductor↔arrendador** (`/api/chat/*`) es una función distinta y **se conserva**.
+- Corregido `.env.example`, que aún pedía `ANTHROPIC_API_KEY` para ese chat pese a la
+  migración a Gemini (v1.0.0); ahora documenta `GEMINI_API_KEY`, las variables del mapa y
+  las de Webpay.
+
+### Seguridad
+- Se documentó el estado de endurecimiento de Supabase en `docs/SEGURIDAD.md` (dos ajustes
+  pendientes de panel: listado de buckets públicos y protección de contraseñas filtradas).
+
+**⚠ Cambio rompiente:** `POST /api/support/chat` deja de existir. Ningún cliente propio lo
+consumía (solo el widget eliminado).
 
 ---
 
