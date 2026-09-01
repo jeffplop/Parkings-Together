@@ -30,6 +30,21 @@ versionado de [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
   reemplazó por `geojs` (primario) e `ipwho.is` (respaldo), ambos keyless sobre HTTPS.
 - Dos avisos de lint reales: directiva `eslint-disable` muerta en `profile/page.js` y un
   `console.log` de producción en `gemini.js` (ahora `console.warn` solo en desarrollo).
+- **`sql/014_recalcular_ratings.sql`** (nuevo): recalcula `rating`/`reviews_count` desde
+  `reservas.calificacion` (la fuente de verdad), corrigiendo el "social proof" falso de las
+  semillas de demostración. Idempotente; se ejecuta en el panel de Supabase.
+
+### Cambiado
+- **Dependencias actualizadas** (bumps seguros de Dependabot): `swagger-ui-react` 5.32.13,
+  `@supabase/supabase-js` 2.112.x, `@hookform/resolvers` 5.8.0, herramientas de desarrollo
+  (jest/turbo/babel) y GitHub Actions (checkout/setup-node v7, cache v6, upload-artifact v7).
+  El grupo `next`/`react` se mantiene pineado en 16.2.11/19.2.6 a propósito: el bump a Next
+  16.3 rompía la resolución de `eslint-config-next` en la raíz del monorepo.
+- `ms-reservas` marcado explícitamente como **demostración didáctica** del patrón Saga (con
+  condición de carrera conocida, no desplegado, no usado por el frontend); el camino real de
+  producción es la RPC `reservar_estacionamiento` con `FOR UPDATE`.
+- `docs/QA_FINDINGS.md`: marcado como obsoleto el hallazgo del chat IA (eliminado; IA en
+  Gemini).
 
 ### Eliminado
 - **Chat de soporte con IA** (widget flotante "Dareko"): componente `SupportChat.js`, ruta
