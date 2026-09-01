@@ -55,6 +55,15 @@ versionado de [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
   las de Webpay.
 
 ### Seguridad
+- **Hueco en `POST /api/pagos` (cerrado).** Las validaciones de propiedad y de monto vivían
+  dentro de `if (reserva)`; como la RLS de `reservas` oculta las reservas ajenas, enviar el
+  `reserva_id` de otra persona hacía que `reserva` fuera `null` y **se saltaran todas las
+  validaciones**, registrando un pago "completado" sobre una reserva ajena con monto
+  arbitrario (y rompiendo la idempotencia). Ahora, si se envía un `reserva_id`, la reserva
+  debe existir y ser visible, o se rechaza con 404.
+- **`sql/015_payments_idempotencia.sql`** (nuevo): índice único parcial que garantiza un solo
+  pago `completed` por reserva a nivel de BD, eliminando la carrera del check-then-act de la
+  idempotencia (doble clic → dos pagos).
 - Se documentó el estado de endurecimiento de Supabase en `docs/SEGURIDAD.md` (dos ajustes
   pendientes de panel: listado de buckets públicos y protección de contraseñas filtradas).
 
