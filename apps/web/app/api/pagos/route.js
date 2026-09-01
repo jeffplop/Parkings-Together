@@ -61,25 +61,37 @@ export async function POST(request) {
       .eq('id', reserva_id)
       .maybeSingle();
 
-    if (reserva) {
-      // Solo el conductor de la reserva puede pagarla.
-      if (reserva.conductor_id !== user.id) {
-        return NextResponse.json({ success: false, error: 'No puedes pagar una reserva que no es tuya.' }, { status: 403 });
-      }
-      // Si la reserva tiene precio fijado, el monto debe coincidir (anti-manipulación de precio).
-      if (reserva.precio_total != null && Math.round(Number(reserva.precio_total)) !== Math.round(amt)) {
-        return NextResponse.json({ success: false, error: 'El monto no coincide con el de la reserva.' }, { status: 400 });
-      }
-      // Idempotencia: si ya hay un pago completado para esta reserva, devolverlo.
-      const { data: existing } = await db
-        .from('payments')
-        .select('id, transaction_id, status')
-        .eq('reserva_id', reserva_id)
-        .eq('status', 'completed')
-        .maybeSingle();
-      if (existing) {
-        return NextResponse.json({ success: true, payment: existing, idempotent: true }, { status: 200 });
-      }
+    // Si se envía un reserva_id, la reserva DEBE existir y ser visible para el
+    // usuario. Con la RLS de `reservas` (SELECT solo del conductor o del anfitrión
+    // dueño), una reserva ajena devuelve null. NO se puede continuar en ese caso:
+    // de lo contrario se saltarían la verificación de propiedad y de monto, y se
+    // registraría un pago "completado" sobre una reserva de otra persona (lo que
+    // además rompería la idempotencia devolviendo ese pago al conductor real).
+    if (!reserva) {
+      return NextResponse.json(
+        { success: false, error: 'Reserva no encontrada o sin acceso.' },
+        { status: 404 },
+      );
+    }
+
+    // Solo el conductor de la reserva puede pagarla (defensa en profundidad:
+    // un anfitrión sí puede VER la reserva por RLS, pero no es su pagador).
+    if (reserva.conductor_id !== user.id) {
+      return NextResponse.json({ success: false, error: 'No puedes pagar una reserva que no es tuya.' }, { status: 403 });
+    }
+    // Si la reserva tiene precio fijado, el monto debe coincidir (anti-manipulación de precio).
+    if (reserva.precio_total != null && Math.round(Number(reserva.precio_total)) !== Math.round(amt)) {
+      return NextResponse.json({ success: false, error: 'El monto no coincide con el de la reserva.' }, { status: 400 });
+    }
+    // Idempotencia: si ya hay un pago completado para esta reserva, devolverlo.
+    const { data: existing } = await db
+      .from('payments')
+      .select('id, transaction_id, status')
+      .eq('reserva_id', reserva_id)
+      .eq('status', 'completed')
+      .maybeSingle();
+    if (existing) {
+      return NextResponse.json({ success: true, payment: existing, idempotent: true }, { status: 200 });
     }
   }
 
