@@ -42,8 +42,6 @@ tags:
     description: Gestión del plan de suscripción (puerto 3000)
   - name: BFF · Reseñas
     description: Reseñas de estacionamientos con resumen IA (puerto 3000)
-  - name: BFF · Soporte
-    description: Chat de soporte con IA (Claude Haiku) (puerto 3000)
   - name: Autenticación MS
     description: Login vía microservicio auth (puerto 3001)
   - name: MS Mapas
@@ -641,47 +639,6 @@ paths:
                     resumen: null
                     motivo: pocas_resenas
         '400': { $ref: '#/components/responses/BadRequest' }
-
-  # ─────────────────────── BFF · SOPORTE IA (puerto 3000) ──────────────────────
-  /api/support/chat:
-    post:
-      tags: [BFF · Soporte]
-      summary: Chat de soporte con asistente IA
-      description: |
-        Envía un mensaje al asistente de soporte impulsado por **Claude Haiku**.
-        Protecciones implementadas:
-        - Detección de prompt injection (15+ patrones regex).
-        - Escalado automático a humano ante temas sensibles (fraude, legal, emergencias).
-        - Rate limit: 20 mensajes/IP/min.
-        - El asistente solo responde sobre el dominio de la plataforma.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [message]
-              properties:
-                message: { type: string, maxLength: 1000, example: "¿Cómo cancelo una reserva?" }
-                history:
-                  type: array
-                  description: Historial de conversación previo (hasta 10 turnos)
-                  items:
-                    type: object
-                    properties:
-                      role: { type: string, enum: [user, assistant] }
-                      content: { type: string }
-      responses:
-        '200':
-          description: Respuesta del asistente
-          content:
-            application/json:
-              example:
-                success: true
-                response: "Para cancelar una reserva, ve a 'Mis Reservas' y selecciona 'Cancelar' en la reserva activa."
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
-        '500': { $ref: '#/components/responses/ServerError' }
 
   # ──────────────────────── MICROSERVICIO AUTH (puerto 3001) ───────────────────
   /api/v1/auth/register:

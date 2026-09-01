@@ -1,7 +1,6 @@
 import './globals.css';
 import Navbar from '../src/components/Navbar';
 import PWAInstallPrompt from '../src/components/PWAInstallPrompt';
-import SupportChat from '../src/components/SupportChat';
 import { Toaster } from 'react-hot-toast';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://parkings-web.vercel.app';
@@ -61,7 +60,6 @@ export default function RootLayout({ children }) {
         <Navbar />
         {children}
         <PWAInstallPrompt />
-        <SupportChat />
       </body>
     </html>
   );
