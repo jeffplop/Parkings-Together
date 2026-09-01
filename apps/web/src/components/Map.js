@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { MAP_TILES_URL, MAP_TILES_OPTIONS } from '../lib/mapTiles';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
@@ -57,11 +58,7 @@ export default function Map({
       mapRef.current = L.map('map', { zoomControl: false })
         .setView([location.lat, location.lng], 15);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        subdomains: 'abcd',
-        maxZoom: 20,
-      }).addTo(mapRef.current);
+      L.tileLayer(MAP_TILES_URL, MAP_TILES_OPTIONS).addTo(mapRef.current);
 
       markerLayerRef.current = L.markerClusterGroup({
         maxClusterRadius: 60,

@@ -2,6 +2,7 @@
 // ✅ REGLA 1: Eliminado import de Supabase. Solo Leaflet para el mapa interactivo.
 'use client';
 import { useEffect, useRef } from 'react';
+import { MAP_TILES_URL, MAP_TILES_OPTIONS } from '../lib/mapTiles';
 import 'leaflet/dist/leaflet.css';
 
 export default function MiniMap({ lat, lng, setLat, setLng, onAddressResolved }) {
@@ -44,9 +45,7 @@ export default function MiniMap({ lat, lng, setLat, setLng, onAddressResolved })
       zoomControl: true,
     }).setView([initialLat, initialLng], 14);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '©OpenStreetMap',
-    }).addTo(mapInstance.current);
+    L.tileLayer(MAP_TILES_URL, MAP_TILES_OPTIONS).addTo(mapInstance.current);
 
     // Click en el mapa para colocar el pin
     mapInstance.current.on('click', (e) => {
