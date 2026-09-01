@@ -22,13 +22,22 @@ fallas reales** (una de UX, corregida; una de configuración en producción).
 | Mapa (`/mapa`) | ✅ | Búsqueda geográfica `GET /api/mapas/search` → **200**. Mapa, radar, filtros y selector de vehículo OK. |
 | Ranking (`/ranking`) | ✅ | Detecta región (RM), stats 17/17/4.4, filtros y TOP-3 con podio OK. |
 | Premium (`/premium`) | ⚠️→✅ | **FOUC** corregido (ver 3.2). Tras hidratar, todas las secciones (planes, calculadora, niveles, comparativa, FAQ) se ven perfectas. |
-| Chat IA (Dareko) | ❌ | La UI funciona, pero la **IA falla en producción** (ver 3.1). |
+| Chat IA (Dareko) | 🗑️ | **Eliminado del proyecto** (ver nota en 3.1). Ya no existe el widget ni la ruta. |
 | Login + Dashboard (arrendador) | ✅ | Sesión OK; panel con stats, publicar, reservas y "mis estacionamientos". |
 | Publicar estacionamiento | ✅ | Flujo completo: geocoding → datos → `POST /api/mapas/search` **201**; aparece "DISPONIBLE · 0/5 · $1500/hr". |
 
 ## 3. Hallazgos
 
 ### 3.1 ❌ CRÍTICO — El chat de IA falla en producción (config)
+
+> ✅ **RESUELTO / OBSOLETO (actualización posterior).** El **chat de soporte con IA
+> ("Dareko") fue eliminado por completo** del proyecto (componente `SupportChat.js`
+> y ruta `POST /api/support/chat`), así que este hallazgo ya no aplica. Además, las
+> funciones de IA que se conservan —*Resumen de reseñas* y *Sugeridor de precios*—
+> **migraron de Anthropic a Google Gemini**: usan `GEMINI_API_KEY` (opcional; sin
+> ella degradan con elegancia, no rompen la app). Ya **no** se necesita
+> `ANTHROPIC_API_KEY`. Todo lo que sigue en 3.1 queda como registro histórico.
+
 Enviar cualquier mensaje al asistente "Dareko" devuelve siempre:
 *"Ocurrió un error. Por favor intenta de nuevo…"* (probado 2 veces, persistente).
 - **Causa raíz CONFIRMADA** (runtime logs de Vercel, prod): el error es
@@ -98,19 +107,21 @@ contenido clave.
 | Calificación | Solo reservas completadas (1–5); recalcula el rating del estacionamiento. |
 | Pagos | Proveedores mock/efectivo/webpay. Solo el conductor paga su reserva; el monto debe coincidir; idempotente; tope 10M CLP. **Simulado** (Webpay para producción). |
 | Premium | Planes free/pro/premium, mensual/anual. El conductor siempre reserva gratis. |
-| Chat IA | Rate-limit 20/min/IP, anti prompt-injection, escalación a humano, Claude Haiku, 600 chars, últimos 10 mensajes. |
+| ~~Chat IA~~ | 🗑️ Eliminado del proyecto. Las funciones de IA que quedan (resumen de reseñas, sugeridor de precios) usan **Gemini**. |
 
 ## 5. Estado y próximos pasos
 
 - ✅ QA interactivo de la superficie pública + auditoría de código.
 - ✅ Corregidos: FOUC de Premium y Toaster duplicado (PR de QA).
-- 🔴 **Pendiente urgente (ops):** arreglar la IA en producción (env/model en Vercel).
+- ✅ **Chat IA eliminado** del proyecto; el hallazgo 3.1 (ANTHROPIC_API_KEY) queda obsoleto.
+- ✅ **Mapa:** corregido el "API KEY REQUIRED" migrando de CARTO a Esri Dark Gray (sin key).
+- ✅ **Geolocalización:** corregido el 403 de `ip-api.com` (solo HTTP) usando geojs/ipwho.is.
 - ⏳ **Flujos autenticados** (publicar/reservar/pagar/calificar): requieren una
   sesión iniciada. El asistente no puede crear cuentas ni introducir contraseñas;
   hacen falta o bien que el equipo recorra esos flujos, o una sesión de prueba ya
   iniciada en el navegador.
-- ✅ Migración de IA a **Gemini** hecha en código (chat + resumen). Toma efecto al
-  desplegar; usa la key ya configurada (`GEMINI_API_KEY`/`GOOGLE_API_KEY`/`ANTHROPIC_API_KEY`).
+- ✅ Migración de IA a **Gemini** hecha en código (resumen de reseñas + sugeridor de
+  precios; el chat se eliminó). Usa `GEMINI_API_KEY` (o `GOOGLE_API_KEY`); opcional.
 - ⏳ Innovación: integración real de **Webpay (Transbank)** — la base (Strategy en
   `payments.js` + `/api/pagos`) ya está lista; falta SDK + credenciales.
 
