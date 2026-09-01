@@ -4,17 +4,40 @@ import { supabase } from '@parkings/supabase-db';
 // Estrategia de localización en 3 fases:
 // 1. getCurrentPosition rápido (baja precisión, timeout 4s) → mueve el mapa de inmediato
 // 2. watchPosition alta precisión → refina cuando GPS esté disponible
-// 3. Fallback IP → si el navegador rechaza permisos, consulta ip-api.com (sin API key)
+// 3. Fallback IP → si el navegador rechaza permisos, se estima por IP (sin API key)
 // El fallback fijo de Santiago solo se usa si todo lo anterior falla.
 
 const FALLBACK_SANTIAGO = { lat: -33.4489, lng: -70.6693 }; // Centro de Santiago (más preciso)
 
+// Estimación por IP con proveedores keyless sobre HTTPS.
+//
+// Antes se usaba ip-api.com, pero su tier gratuito es solo HTTP: desde una
+// página HTTPS devuelve 403 (era el "403 Forbidden" que aparecía en consola) y
+// el usuario que negaba el GPS acababa SIEMPRE en Santiago, ignorando su ciudad.
+// Se prueban dos proveedores en cadena por resiliencia.
 async function getLocationByIP() {
+  // geojs: keyless, HTTPS. Devuelve latitude/longitude como string.
   try {
-    const res = await fetch('https://ip-api.com/json/?fields=lat,lon,status', { signal: AbortSignal.timeout(4000) });
-    const data = await res.json();
-    if (data.status === 'success') return { lat: data.lat, lng: data.lon };
-  } catch { /* silencioso */ }
+    const res = await fetch('https://get.geojs.io/v1/ip/geo.json', { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const d = await res.json();
+      const lat = parseFloat(d.latitude);
+      const lng = parseFloat(d.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+  } catch { /* se prueba el siguiente proveedor */ }
+
+  // ipwho.is: keyless, HTTPS. Devuelve success + latitude/longitude numéricos.
+  try {
+    const res = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const d = await res.json();
+      if (d.success && Number.isFinite(d.latitude) && Number.isFinite(d.longitude)) {
+        return { lat: d.latitude, lng: d.longitude };
+      }
+    }
+  } catch { /* cae al fallback fijo */ }
+
   return null;
 }
 

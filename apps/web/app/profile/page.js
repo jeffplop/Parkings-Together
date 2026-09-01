@@ -42,7 +42,6 @@ export default function ProfilePage() {
         setLoadingFavs(false);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const handleQuitarFavorito = async (estacionamientoId) => {

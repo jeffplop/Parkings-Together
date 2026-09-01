@@ -43,7 +43,11 @@ async function resolveModel(key) {
         usable[0];
       if (pick) {
         cachedModel = pick.name.replace(/^models\//, '');
-        console.log('[gemini] modelo seleccionado:', cachedModel);
+        // Diagnóstico solo en desarrollo: en producción no ensucia la consola
+        // (el modelo se autodescubre una vez y se cachea).
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[gemini] modelo seleccionado:', cachedModel);
+        }
         return cachedModel;
       }
     } else {
