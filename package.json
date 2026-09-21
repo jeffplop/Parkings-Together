@@ -25,14 +25,14 @@
   "devDependencies": {
     "@babel/core": "7.29.7",
     "@babel/preset-env": "^7.29.7",
-    "@eslint/eslintrc": "3.3.6",
+    "@eslint/eslintrc": "3.3.7",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
-    "babel-jest": "^30.5.0",
+    "babel-jest": "^30.5.1",
     "eslint": "9.39.5",
     "eslint-config-next": "16.2.11",
-    "jest": "^30.5.0",
-    "turbo": "2.10.12"
+    "jest": "^30.5.1",
+    "turbo": "2.10.13"
   },
   "engines": {
     "node": ">=22.0.0"
